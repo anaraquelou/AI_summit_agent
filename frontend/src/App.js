@@ -6,13 +6,15 @@ function App() {
   const [messages, setMessages] = useState([
     {
       role: 'assistant',
-      content: 'Hello! I\'m here to help you with returns and refunds. How can I assist you today?',
+      content: 'Olá! Sou o João, seu assistente especializado em gestão de pedidos e devoluções da Polar E-commerce. Posso ajudá-lo(a) a verificar informações de pedidos, consultar nossa política de devolução e processar devoluções. Como posso ajudá-lo(a) hoje?',
       timestamp: new Date().toISOString()
     }
   ]);
   const [inputMessage, setInputMessage] = useState('');
   const [isLoading, setIsLoading] = useState(false);
   const messagesEndRef = useRef(null);
+  // Use a consistent thread_id for conversation memory
+  const [threadId] = useState(() => `thread_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`);
 
   const scrollToBottom = () => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
@@ -38,21 +40,34 @@ function App() {
     try {
       const response = await axios.post('/chat', {
         message: inputMessage,
-        conversation_history: messages
+        conversation_history: messages,
+        thread_id: threadId  // Send thread_id for conversation memory
       });
 
-      const assistantMessage = {
-        role: 'assistant',
-        content: response.data.message,
-        timestamp: new Date().toISOString()
-      };
-
-      setMessages(response.data.conversation_history);
+      // The backend returns the full conversation history
+      if (response.data.conversation_history && response.data.conversation_history.length > 0) {
+        // Add timestamps to messages that don't have them
+        const messagesWithTimestamps = response.data.conversation_history.map((msg, idx) => ({
+          ...msg,
+          timestamp: msg.timestamp || new Date().toISOString()
+        }));
+        setMessages(messagesWithTimestamps);
+      } else {
+        // Fallback: add assistant message if history is empty
+        const assistantMessage = {
+          role: 'assistant',
+          content: response.data.message || 'Desculpe, não recebi uma resposta.',
+          timestamp: new Date().toISOString()
+        };
+        setMessages(prev => [...prev, assistantMessage]);
+      }
     } catch (error) {
       console.error('Error sending message:', error);
       const errorMessage = {
         role: 'assistant',
-        content: 'Sorry, I encountered an error. Please try again.',
+        content: error.response?.data?.detail 
+          ? `Desculpe, ocorreu um erro: ${error.response.data.detail}` 
+          : 'Desculpe, encontrei um erro. Por favor, tente novamente.',
         timestamp: new Date().toISOString()
       };
       setMessages(prev => [...prev, errorMessage]);
@@ -71,8 +86,8 @@ function App() {
   return (
     <div className="App">
       <header className="App-header">
-        <h1>🛍️ Return Policy Assistant</h1>
-        <p>Get help with returns, refunds, and order cancellations</p>
+        <h1>🛍️ Assistente de Devoluções - Polar E-commerce</h1>
+        <p>Verifique pedidos, consulte políticas e processe devoluções</p>
       </header>
       
       <div className="chat-container">
@@ -114,7 +129,7 @@ function App() {
               value={inputMessage}
               onChange={(e) => setInputMessage(e.target.value)}
               onKeyPress={handleKeyPress}
-              placeholder="Type your message here..."
+              placeholder="Digite sua mensagem aqui... (Ex: 'Como funciona a política de devolução?', 'Verificar pedido e481f51...')"
               disabled={isLoading}
               rows={1}
             />
@@ -123,7 +138,7 @@ function App() {
               disabled={!inputMessage.trim() || isLoading}
               className="send-button"
             >
-              Send
+              Enviar
             </button>
           </div>
         </div>
