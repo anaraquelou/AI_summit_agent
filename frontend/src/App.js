@@ -2,6 +2,37 @@ import React, { useState, useRef, useEffect } from 'react';
 import axios from 'axios';
 import './App.css';
 
+// Helper function to filter out intermediate step messages
+const isIntermediateStep = (message) => {
+  if (!message || !message.content) return false;
+  const content = message.content.trim();
+  
+  // Patterns that indicate intermediate steps
+  const intermediatePatterns = [
+    /^Available tables?:/i,
+    /^Thought:/i,
+    /^Action:/i,
+    /^Action Input:/i,
+    /^Observation:/i,
+    /^Tool:/i,
+    /^Tables available:/i,
+    /^Query:/i,
+    /^Result:/i
+  ];
+  
+  // Check if content matches any intermediate pattern
+  if (intermediatePatterns.some(pattern => pattern.test(content))) {
+    return true;
+  }
+  
+  // Filter out very short messages that are just metadata (less than 10 chars, no spaces)
+  if (content.length < 10 && !content.includes(' ') && !content.includes('.')) {
+    return true;
+  }
+  
+  return false;
+};
+
 function App() {
   const [messages, setMessages] = useState([
     {
@@ -46,11 +77,20 @@ function App() {
 
       // The backend returns the full conversation history
       if (response.data.conversation_history && response.data.conversation_history.length > 0) {
-        // Add timestamps to messages that don't have them
-        const messagesWithTimestamps = response.data.conversation_history.map((msg, idx) => ({
-          ...msg,
-          timestamp: msg.timestamp || new Date().toISOString()
-        }));
+        // Add timestamps to messages that don't have them and filter out intermediate steps and empty messages
+        const messagesWithTimestamps = response.data.conversation_history
+          .map((msg, idx) => ({
+            ...msg,
+            timestamp: msg.timestamp || new Date().toISOString()
+          }))
+          .filter(msg => {
+            // Filter out messages with no content or empty content
+            if (!msg.content || typeof msg.content !== 'string' || msg.content.trim().length === 0) {
+              return false;
+            }
+            // Filter out intermediate steps
+            return !isIntermediateStep(msg);
+          });
         setMessages(messagesWithTimestamps);
       } else {
         // Fallback: add assistant message if history is empty
@@ -131,7 +171,7 @@ function App() {
               onKeyPress={handleKeyPress}
               placeholder="Digite sua mensagem aqui... (Ex: 'Como funciona a política de devolução?', 'Verificar pedido e481f51...')"
               disabled={isLoading}
-              rows={1}
+              rows={3}
             />
             <button 
               onClick={sendMessage} 
