@@ -17,7 +17,7 @@ A comprehensive LLM chat agent that intelligently routes queries to retrieve inf
 - **Backend**: FastAPI with LangChain/LangGraph agent
 - **Frontend**: React with modern chat interface
 - **Database**: SQLite with e-commerce order data (`datasets/olist_ecommerce.db`)
-- **LLM**: OpenAI GPT-4o for routing and answer generation
+- **LLM**: OpenAI GPT-5o for routing and answer generation
 - **Document Storage**: PDF-based policy retrieval (`docs/polar-return-policy.pdf`)
 - **State Management**: LangGraph with InMemorySaver for conversation checkpointing
 
@@ -153,13 +153,6 @@ The system uses an e-commerce database with the following key tables:
 - `GET /health`: Health check endpoint
 - `GET /`: API information
 
-## Customization
-
-- **PDF Policy**: Modify `PDF_PATH` in `agent/return_agent.py` to use your own return policy
-- **Database**: Update database path and queries for your specific data structure
-- **Routing Logic**: Customize routing decisions in the `decide_path` function
-- **Answer Generation**: Modify the `answer_node` system prompt for different tone/behavior
-- **Frontend**: Style the frontend by editing `frontend/frontend/src/App.css`
 
 ## Key Differences from Previous Implementation
 
@@ -170,15 +163,6 @@ This version uses a **routing-based architecture** instead of a fixed conversati
 - **Tool Integration**: Seamlessly combines PDF and SQL tools based on query needs
 - **Flexible Conversations**: Supports natural conversation flow without rigid stages
 - **Memory**: Uses LangGraph checkpointing for persistent conversation state
-
-## Troubleshooting
-
-- **OpenAI API Key**: Ensure your OpenAI API key is correctly set in the `.env` file
-- **PDF File**: Check that the PDF file exists at `docs/polar-return-policy.pdf`
-- **Database**: Verify the database file exists at `datasets/olist_ecommerce.db`
-- **Servers**: Make sure both backend and frontend servers are running
-- **Model Access**: Ensure you have access to GPT-4o (or update model in `return_agent.py`)
-- **Thread IDs**: For conversation memory, use consistent thread IDs in API calls
 
 ## Development
 
