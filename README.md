@@ -1,22 +1,49 @@
 # Return Policy Chat Agent
 
-A comprehensive LLM chat agent that can retrieve information from PDFs and query databases to help customers with return requests. Built with FastAPI, LangChain/LangGraph, and React.
+A comprehensive LLM chat agent that intelligently routes queries to retrieve information from PDFs and query databases to help customers with return requests. Built with FastAPI, LangChain/LangGraph, and React.
 
 ## Features
 
-- **PDF Retrieval**: Extracts return policy information from PDF documents
-- **Database Integration**: Queries customer orders and payment information
-- **Conversational Flow**: Guides users through the return process step by step
+- **Intelligent Routing**: Automatically decides which tools are needed (PDF, SQL, both, or general) based on user queries
+- **PDF Retrieval**: Extracts and uses return policy information from PDF documents
+- **Database Integration**: Queries customer orders, payment information, and order eligibility
+- **Return Processing**: Can process return requests by updating order status in the database
+- **Conversation Memory**: Maintains full chat history using LangGraph checkpointing
 - **Modern UI**: Beautiful React frontend with real-time chat interface
-- **LangGraph Workflow**: Structured conversation flow using LangGraph
+- **LangGraph Workflow**: Dynamic routing workflow using LangGraph state management
 
 ## Architecture
 
 - **Backend**: FastAPI with LangChain/LangGraph agent
 - **Frontend**: React with modern chat interface
-- **Database**: SQLite with e-commerce order data
-- **LLM**: OpenAI GPT-3.5-turbo
-- **Vector Store**: FAISS for PDF document retrieval
+- **Database**: SQLite with e-commerce order data (`datasets/olist_ecommerce.db`)
+- **LLM**: OpenAI GPT-4o for routing and answer generation
+- **Document Storage**: PDF-based policy retrieval (`docs/polar-return-policy.pdf`)
+- **State Management**: LangGraph with InMemorySaver for conversation checkpointing
+
+## Agent Workflow
+
+The agent uses an intelligent routing system that dynamically decides the best path:
+
+1. **Route Decision** (`decide_path`): Analyzes user query and routes to:
+   - `sql_branch`: Database queries only (e.g., "What is the status of order X?")
+   - `pdf_branch`: Policy information only (e.g., "What is the return policy?")
+   - `pdf_sql_branch`: Both PDF and database needed (e.g., "Is order X eligible for return?")
+   - `general`: General conversation (e.g., "Who are you?")
+
+2. **PDF Processing**: Loads and serializes PDF policy document when needed
+
+3. **SQL Workflow**: 
+   - Lists available tables
+   - Gets schema for relevant tables
+   - Generates SQL queries
+   - Validates queries
+   - Executes queries
+   - Returns to answer node
+
+4. **Answer Generation**: Combines PDF context and SQL results to provide comprehensive answers
+
+5. **Return Processing**: When user confirms a return, updates order status to 'returned'
 
 ## Setup Instructions
 
@@ -39,7 +66,11 @@ pip install -r requirements.txt
 echo "OPENAI_API_KEY=your_openai_api_key_here" > .env
 ```
 
-3. Run the backend server:
+3. Verify data files exist:
+   - `datasets/olist_ecommerce.db` - SQLite database with order data
+   - `docs/polar-return-policy.pdf` - Return policy document
+
+4. Run the backend server:
 ```bash
 python main.py
 ```
@@ -68,32 +99,53 @@ The frontend will be available at `http://localhost:3000`
 ## Usage
 
 1. Open the React app in your browser
-2. Start a conversation by asking about returns
-3. Follow the agent's guidance through the return process:
-   - Provide your customer ID
-   - Select an order to return
-   - Confirm the return request
-   - Receive confirmation and refund information
+2. Start a conversation by asking about returns or order information
+3. The agent will intelligently route your query:
+   - Ask about policy → Routes to PDF branch
+   - Ask about specific order → Routes to SQL branch
+   - Check order eligibility → Routes to PDF+SQL branch
+   - General questions → Routes to general conversation
 
-## Conversation Flow
+### Example Queries
 
-The agent follows this structured workflow:
+- **Policy Questions**: 
+  - "Como funciona a política de devolução?"
+  - "Qual é o prazo máximo para devolução?"
 
-1. **Greeting**: Detects return intent and welcomes the user
-2. **Policy Information**: Retrieves and explains return policy from PDF
-3. **Conditions Check**: Verifies customer ID and return eligibility
-4. **Order Selection**: Shows recent orders and lets user select one
-5. **Confirmation**: Processes the return and updates database
-6. **Completion**: Provides final confirmation and refund details
+- **Order Information**:
+  - "Qual o id do cliente para o pedido 6514b8ad8028c9f2cc2374ded245783f?"
+  - "Qual é o status do pedido 123?"
+
+- **Eligibility Checks**:
+  - "Você pode checar se o pedido e481f51cbdc54678b7cc49136f2d6af7 é elegível para devolução?"
+  - "O pedido X pode ser devolvido?"
+
+- **Return Processing**:
+  - After confirming eligibility, the agent can process returns by updating order status
+
+## Agent Implementation
+
+The agent is implemented in `agent/return_agent.py` with the following key components:
+
+- **AgentState**: TypedDict defining state with messages, PDF context, and routing decisions
+- **Routing Functions**: `decide_path` uses LLM to determine optimal query path
+- **PDF Branch**: Loads and serializes PDF content when needed
+- **SQL Tools**: Uses SQLDatabaseToolkit for database interactions
+- **Return Tool**: `process_order_return` updates order status to 'returned'
+- **Answer Node**: Generates final answers combining PDF and SQL context
+- **Graph Structure**: LangGraph workflow with conditional edges for dynamic routing
 
 ## Database Schema
 
 The system uses an e-commerce database with the following key tables:
 
 - `customers`: Customer information
-- `orders`: Order details and status
+- `orders`: Order details, status, and delivery dates
 - `order_items`: Items in each order
 - `order_payments`: Payment information
+- `order_reviews`: Customer reviews
+- `products`: Product information
+- `sellers`: Seller information
 
 ## API Endpoints
 
@@ -103,14 +155,41 @@ The system uses an e-commerce database with the following key tables:
 
 ## Customization
 
-- Modify the PDF path in `agent/return_agent.py` to use your own return policy
-- Update the database schema and queries for your specific data structure
-- Customize the conversation flow by modifying the LangGraph nodes
-- Style the frontend by editing `frontend/frontend/src/App.css`
+- **PDF Policy**: Modify `PDF_PATH` in `agent/return_agent.py` to use your own return policy
+- **Database**: Update database path and queries for your specific data structure
+- **Routing Logic**: Customize routing decisions in the `decide_path` function
+- **Answer Generation**: Modify the `answer_node` system prompt for different tone/behavior
+- **Frontend**: Style the frontend by editing `frontend/frontend/src/App.css`
+
+## Key Differences from Previous Implementation
+
+This version uses a **routing-based architecture** instead of a fixed conversation flow:
+
+- **Dynamic Routing**: Routes queries based on intent, not predefined steps
+- **Context-Aware**: Maintains full conversation history automatically
+- **Tool Integration**: Seamlessly combines PDF and SQL tools based on query needs
+- **Flexible Conversations**: Supports natural conversation flow without rigid stages
+- **Memory**: Uses LangGraph checkpointing for persistent conversation state
 
 ## Troubleshooting
 
-- Ensure your OpenAI API key is correctly set in the `.env` file
-- Check that the PDF file exists at `docs/polar-return-policy.pdf`
-- Verify the database file exists at `datasets/olist_ecommerce.db`
-- Make sure both backend and frontend servers are running
+- **OpenAI API Key**: Ensure your OpenAI API key is correctly set in the `.env` file
+- **PDF File**: Check that the PDF file exists at `docs/polar-return-policy.pdf`
+- **Database**: Verify the database file exists at `datasets/olist_ecommerce.db`
+- **Servers**: Make sure both backend and frontend servers are running
+- **Model Access**: Ensure you have access to GPT-4o (or update model in `return_agent.py`)
+- **Thread IDs**: For conversation memory, use consistent thread IDs in API calls
+
+## Development
+
+The agent code is located in `agent/return_agent.py`. Key functions:
+
+- `decide_path()`: Router function that determines query path
+- `pdf_branch()`: Loads PDF content into state
+- `generate_query()`: Generates SQL queries from natural language
+- `answer_node()`: Generates final responses with context
+- `process_order_return()`: Updates order status for returns
+
+## License
+
+This project is part of a LangChain AI Summit demonstration.
