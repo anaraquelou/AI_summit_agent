@@ -7,7 +7,7 @@ const isIntermediateStep = (message) => {
   if (!message || !message.content) return false;
   const content = message.content.trim();
   
-  // Patterns that indicate intermediate steps
+  // Patterns that indicate intermediate steps (tool outputs, system messages, etc.)
   const intermediatePatterns = [
     /^Available tables?:/i,
     /^Thought:/i,
@@ -25,8 +25,11 @@ const isIntermediateStep = (message) => {
     return true;
   }
   
-  // Filter out very short messages that are just metadata (less than 10 chars, no spaces)
-  if (content.length < 10 && !content.includes(' ') && !content.includes('.')) {
+  // Don't filter out short legitimate user or assistant messages
+  // Only filter if it's clearly a system/tool metadata message
+  // (very short, no spaces, no punctuation, and starts with specific patterns)
+  const metadataPatterns = [/^\{/, /^\[/, /^</]; // JSON, arrays, or XML-like structures
+  if (content.length < 5 && metadataPatterns.some(pattern => pattern.test(content))) {
     return true;
   }
   
@@ -88,7 +91,11 @@ function App() {
             if (!msg.content || typeof msg.content !== 'string' || msg.content.trim().length === 0) {
               return false;
             }
-            // Filter out intermediate steps
+            // Don't filter user messages - they should always be displayed
+            if (msg.role === 'user') {
+              return true;
+            }
+            // Filter out intermediate steps only for assistant/system messages
             return !isIntermediateStep(msg);
           });
         setMessages(messagesWithTimestamps);
