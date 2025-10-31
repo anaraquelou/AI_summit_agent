@@ -1,25 +1,13 @@
-# FastAPI and server
-fastapi>=0.104.1
-uvicorn>=0.24.0
-python-multipart>=0.0.6
-
-# LangChain ecosystem - compatible versions for routing agent
-# Note: These versions work together - langgraph 0.0.20 requires langchain-core <0.2.0
-langchain-core>=0.1.8,<0.2.0
-langchain>=0.1.0
-langchain-openai>=0.0.2
-langchain-community>=0.0.10
-langgraph>=0.0.20
-
-# OpenAI SDK for LLM API calls
-openai>=1.6.1,<2.0.0
-
-# PDF processing - PyPDFLoader uses pypdf
-pypdf>=3.0.0
-
-# Data validation and configuration
-pydantic>=2.5.0
-python-dotenv>=1.0.0
-
-# Database - SQLAlchemy required for SQLDatabase utility
-sqlalchemy>=2.0.0,<3.0.0
+fastapi==0.104.1
+uvicorn==0.24.0
+python-multipart==0.0.6
+langchain-core==1.0.2
+langchain==1.0.3
+langchain-openai==1.0.1
+langgraph==1.0.2
+langchain-community==0.4
+openai==2.6.0
+pypdf==6.1.3
+pydantic==2.12.3
+python-dotenv==1.0.0
+sqlalchemy==2.0.44
