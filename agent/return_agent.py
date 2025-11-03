@@ -36,8 +36,8 @@ class AgentState(TypedDict):
 
 # Initialize LLMs
 llm = ChatOpenAI(temperature=0)
-llm_router = ChatOpenAI(model="gpt-4o", temperature=0)
-llm_answer = ChatOpenAI(model="gpt-4o", temperature=0)
+llm_router = ChatOpenAI(model="gpt-5", temperature=0)
+llm_answer = ChatOpenAI(model="gpt-5", temperature=0)
 
 # Initialize database
 db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
@@ -263,7 +263,6 @@ lojavirtual@polar.com | Whataspp: +55 11 4862-7901
 
 <Não fazer>
 - NUNCA corrija o usuário na maneira de escrever.
-- NUNCA fale sobre um outro tema que não seja sobre o E-commerce ou sobre assistência com alguma compra.
 </Não fazer>
 """
 
