@@ -35,7 +35,7 @@ class AgentState(TypedDict):
 
 
 # Initialize LLMs
-llm = ChatOpenAI(temperature=0)
+llm = ChatOpenAI(model="gpt-5", temperature=0)
 llm_router = ChatOpenAI(model="gpt-5", temperature=0)
 llm_answer = ChatOpenAI(model="gpt-5", temperature=0)
 
