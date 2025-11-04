@@ -23,27 +23,132 @@ A comprehensive LLM chat agent that intelligently routes queries to retrieve inf
 
 ## Agent Workflow
 
-The agent uses an intelligent routing system that dynamically decides the best path:
+The agent uses an intelligent routing system that dynamically decides the best path based on user queries. Here's how it works:
 
-1. **Route Decision** (`decide_path`): Analyzes user query and routes to:
-   - `sql_branch`: Database queries only (e.g., "What is the status of order X?")
-   - `pdf_branch`: Policy information only (e.g., "What is the return policy?")
-   - `pdf_sql_branch`: Both PDF and database needed (e.g., "Is order X eligible for return?")
-   - `general`: General conversation (e.g., "Who are you?")
+### Overview
 
-2. **PDF Processing**: Loads and serializes PDF policy document when needed
+Every user query goes through a **routing decision** that determines which tools and data sources are needed. The agent then follows a specific path through the workflow, gathering necessary information, and finally generates a comprehensive answer.
 
-3. **SQL Workflow**: 
-   - Lists available tables
-   - Gets schema for relevant tables
-   - Generates SQL queries
-   - Validates queries
-   - Executes queries
-   - Returns to answer node
+### Step-by-Step Process
 
-4. **Answer Generation**: Combines PDF context and SQL results to provide comprehensive answers
+1. **Route Decision** (`decide_path`): 
+   - The LLM router analyzes the user query and selects one of four paths:
+   - `sql_branch`: Database queries only
+   - `pdf_branch`: Policy information only
+   - `pdf_sql_branch`: Both PDF and database needed
+   - `general`: General conversation (no tools needed)
 
-5. **Return Processing**: When user confirms a return, updates order status to 'returned'
+2. **PDF Processing** (`pdf_branch`): 
+   - If PDF is needed, loads and serializes the return policy PDF
+   - Stores content in state for use in answer generation
+
+3. **SQL Workflow** (when database is needed):
+   - `list_tables`: Lists all available database tables
+   - `call_get_schema` → `get_schema`: Gets schema for relevant tables
+   - `generate_query`: LLM generates SQL query from natural language
+   - `check_query`: Validates and corrects SQL query before execution
+   - `run_query`: Executes the validated SQL query
+   - Results are stored in conversation state
+
+4. **Answer Generation** (`answer`): 
+   - Combines PDF context (if loaded) and SQL results (if available)
+   - Generates comprehensive, context-aware response
+   - May include tool calls for return processing if user confirms
+
+5. **Return Processing** (`process_return`): 
+   - If user confirms a return, executes `process_order_return` tool
+   - Updates order status to 'returned' in database
+   - Returns to answer node for final confirmation
+
+### Workflow Examples
+
+#### Example 1: Policy Question (PDF Branch Only)
+
+**User Query**: "Qual é o prazo máximo para devolução?"
+
+**Workflow Path**:
+1. `decide_path` → Routes to `pdf_branch`
+2. `pdf_branch` → Loads PDF policy document
+3. `answer` → Generates answer using PDF context
+4. **Response**: "O prazo máximo para devolução é de 30 dias corridos após o recebimento do produto, conforme nossa política..."
+
+**Key Nodes**: `decide_path` → `pdf_branch` → `answer` → `END`
+
+---
+
+#### Example 2: Order Status Query (SQL Branch Only)
+
+**User Query**: "Qual é o status do pedido 6514b8ad8028c9f2cc2374ded245783f?"
+
+**Workflow Path**:
+1. `decide_path` → Routes to `sql_branch`
+2. `list_tables` → Lists available database tables
+3. `call_get_schema` → `get_schema` → Gets schema for `orders` table
+4. `generate_query` → Generates: `SELECT order_status FROM orders WHERE order_id = '6514b8ad8028c9f2cc2374ded245783f'`
+5. `check_query` → Validates SQL query
+6. `run_query` → Executes query, gets status: "delivered"
+7. `answer` → Generates response: "O pedido 6514b8ad8028c9f2cc2374ded245783f está com status 'delivered' (entregue)."
+
+**Key Nodes**: `decide_path` → `list_tables` → `call_get_schema` → `get_schema` → `generate_query` → `check_query` → `run_query` → `answer` → `END`
+
+---
+
+#### Example 3: Eligibility Check (PDF + SQL Branch)
+
+**User Query**: "O pedido e481f51cbdc54678b7cc49136f2d6af7 é elegível para devolução?"
+
+**Workflow Path**:
+1. `decide_path` → Routes to `pdf_sql_branch` (needs both)
+2. `pdf_branch` → Loads PDF policy document
+3. `list_tables` → Lists available tables
+4. `call_get_schema` → `get_schema` → Gets schema for `orders` table
+5. `generate_query` → Generates query to get order details (status, delivery date, etc.)
+6. `check_query` → Validates SQL
+7. `run_query` → Executes: Gets order info (delivered 15 days ago, status: "delivered")
+8. `answer` → Combines PDF context (30-day return policy) + SQL results (15 days since delivery)
+   - **Response**: "Sim, o pedido e481f51cbdc54678b7cc49136f2d6af7 é elegível para devolução. Foi entregue há 15 dias e nossa política permite devoluções em até 30 dias após a entrega."
+
+**Key Nodes**: `decide_path` → `pdf_branch` → `list_tables` → `call_get_schema` → `get_schema` → `generate_query` → `check_query` → `run_query` → `answer` → `END`
+
+---
+
+#### Example 4: Processing a Return
+
+**User Query**: "Quero devolver o pedido e481f51cbdc54678b7cc49136f2d6af7"
+
+**Workflow Path**:
+1. `decide_path` → Routes to `pdf_sql_branch` (checks eligibility first)
+2. ... (same as Example 3, checking eligibility)
+3. `answer` → Determines eligibility and offers to process return
+   - User confirms: "Sim, processe a devolução"
+4. `answer` → Generates tool call for `process_order_return`
+5. `process_return` → Executes `process_order_return("e481f51cbdc54678b7cc49136f2d6af7")`
+   - Updates database: `UPDATE orders SET order_status = 'returned' WHERE order_id = '...'`
+6. `answer` → Generates confirmation: "Pedido e481f51cbdc54678b7cc49136f2d6af7 foi marcado como devolvido com sucesso."
+
+**Key Nodes**: ... → `answer` → `process_return` → `answer` → `END`
+
+---
+
+#### Example 5: General Conversation
+
+**User Query**: "Quem é você?"
+
+**Workflow Path**:
+1. `decide_path` → Routes to `general` (no tools needed)
+2. `answer` → Generates response using system prompt
+   - **Response**: "Olá! Sou um assistente especializado em gestão de pedidos e devoluções da Polar E-commerce..."
+
+**Key Nodes**: `decide_path` → `answer` → `END`
+
+### State Management
+
+Throughout the workflow, the agent maintains state using `AgentState`:
+- **messages**: Complete conversation history (automatically maintained)
+- **pdf_context**: PDF content when loaded (persists until next query)
+- **decide_path**: Current routing decision
+
+The state is checkpointed using `InMemorySaver`, allowing the agent to maintain context across multiple turns in a conversation.
 
 ## Setup Instructions
 
