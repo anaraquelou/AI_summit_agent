@@ -18,7 +18,7 @@ A comprehensive LLM chat agent that intelligently routes queries to retrieve inf
 - **Frontend**: React with modern chat interface
 - **Database**: SQLite with e-commerce order data (`datasets/olist_ecommerce.db`)
 - **LLM**: OpenAI GPT-5o for routing and answer generation
-- **Document Storage**: PDF-based policy retrieval (`docs/polar-return-policy.pdf`)
+- **Document Storage**: PDF-based policy retrieval (`docs/BIX-return-policy.pdf`)
 - **State Management**: LangGraph with InMemorySaver for conversation checkpointing
 
 ## Agent Workflow
@@ -173,7 +173,7 @@ echo "OPENAI_API_KEY=your_openai_api_key_here" > .env
 
 3. Verify data files exist:
    - `datasets/olist_ecommerce.db` - SQLite database with order data
-   - `docs/polar-return-policy.pdf` - Return policy document
+   - `docs/BIX-return-policy.pdf` - Return policy document
 
 4. Run the backend server:
 ```bash
