@@ -53,7 +53,7 @@ run_query_node = ToolNode([run_query_tool], name="run_query")
 
 
 def process_order_return(order_id: str) -> str:
-    """Atualiza o status do pedido no banco de dados para 'returned' (devolvido).
+    """Atualiza o status do pedido no banco de dados para 'return_requested' (devolvido).
     
     Args:
         order_id: ID do pedido a ser devolvido/cancelado
@@ -72,11 +72,11 @@ def process_order_return(order_id: str) -> str:
             return f"Erro: Pedido {order_id} não encontrado no banco de dados."
         
         # Atualiza o status
-        cursor.execute("UPDATE orders SET order_status = 'returned' WHERE order_id = ?", (order_id,))
+        cursor.execute("UPDATE orders SET order_status = 'return_requested' WHERE order_id = ?", (order_id,))
         conn.commit()
         conn.close()
         
-        return f"Pedido {order_id} foi marcado como devolvido (returned) com sucesso."
+        return f"Pedido {order_id} foi marcado como devolvido (return_requested) com sucesso."
     except Exception as e:
         return f"Erro ao processar devolução: {str(e)}"
 
@@ -85,7 +85,7 @@ def process_order_return(order_id: str) -> str:
 return_order_tool = StructuredTool.from_function(
     func=process_order_return,
     name="process_order_return",
-    description="Atualiza o status de um pedido para 'returned' (devolvido) no banco de dados. Use esta ferramenta quando o usuário confirmar que deseja devolver ou cancelar um pedido específico."
+    description="Atualiza o status de um pedido para 'return_requested' (devolvido) no banco de dados. Use esta ferramenta quando o usuário confirmar que deseja devolver ou cancelar um pedido específico."
 )
 
 return_order_node = ToolNode([return_order_tool], name="process_return")
@@ -153,7 +153,7 @@ After a customer purchases the product from BIX Store a seller gets notified to 
 Orders table:
 - order_id: unique identifier of an order.
 - customer_id: key to the customer dataset. Each order has a unique customer_id.
-- order_status: reference to the order status (delivered, shipped, cancelled, returned, etc).
+- order_status: reference to the order status (delivered, shipped, cancelled, return_requested, etc).
 - order_purchase_timestamp: shows the purchase timestamp.
 - order_approved_at: shows the payment approval timestamp.
 - order_delivered_carrier_date: shows the order posting timestamp. When it was handled to the logistic partner.
@@ -317,7 +317,7 @@ Você é extremamente simpático e amigável e sempre trata as pessoas com Sr. o
 - Quando possível, justificar a resposta com base no contexto do PDF ou nos dados do banco de dados.
 - Se algo não for possível responder, diga claramente o motivo e sugira um próximo passo útil.
 - Quando a pergunta envolver devolução de um pedido específico, pergunte o número do pedido e verifique no banco de dados as informações e cruze com as regras do PDF para determinar se o pedido é elegível para devolução.
-- Quando o usuário CONFIRMAR que deseja devolver ou cancelar um pedido específico, use a ferramenta process_order_return para atualizar o status do pedido para 'returned'.
+- Quando o usuário CONFIRMAR que deseja devolver ou cancelar um pedido específico, use a ferramenta process_order_return para atualizar o status do pedido para 'return_requested'.
 - Seja preciso, transparente e profissional.
 - Sempre responda em português claro e direto.
 - Use tom cordial, mas objetivo.
