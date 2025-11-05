@@ -24,7 +24,7 @@ from langgraph.prebuilt import ToolNode
 # Get project root directory (parent of agent/)
 PROJECT_ROOT = Path(__file__).parent.parent
 DB_PATH = PROJECT_ROOT / "datasets" / "olist_ecommerce.db"
-PDF_PATH = PROJECT_ROOT / "docs" / "polar-return-policy.pdf"
+PDF_PATH = PROJECT_ROOT / "docs" / "BIX-return-policy.pdf"
 
 
 class AgentState(TypedDict):
