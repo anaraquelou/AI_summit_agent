@@ -1,4 +1,4 @@
-# Return Policy Chat Agent
+# AI Analyst Chat Agent
 
 A comprehensive LLM chat agent that intelligently routes queries to retrieve information from PDFs and query databases to help customers with return requests. Built with FastAPI, LangChain/LangGraph, and React.
 
@@ -137,7 +137,7 @@ Every user query goes through a **routing decision** that determines which tools
 **Workflow Path**:
 1. `decide_path` → Routes to `general` (no tools needed)
 2. `answer` → Generates response using system prompt
-   - **Response**: "Olá! Sou um assistente especializado em gestão de pedidos e devoluções da Polar E-commerce..."
+   - **Response**: "Olá! Sou um assistente especializado em gestão de pedidos e devoluções da BIX E-commerce..."
 
 **Key Nodes**: `decide_path` → `answer` → `END`
 
@@ -186,7 +186,7 @@ The backend will be available at `http://localhost:8000`
 
 1. Navigate to the frontend directory:
 ```bash
-cd frontend/frontend
+cd frontend
 ```
 
 2. Install dependencies:
@@ -196,7 +196,7 @@ npm install
 
 3. Start the React development server:
 ```bash
-npm start
+npm run dev
 ```
 
 The frontend will be available at `http://localhost:3000`
