@@ -223,12 +223,17 @@ def list_tables(state: AgentState):
 
 
 def call_get_schema(state: AgentState):
-    """Force model to create a tool call for getting schema."""
+    """Create tool call for getting schema directly (no LLM needed)."""
     print("call_get_schema tool")
-    llm_with_tools = llm.bind_tools([get_schema_tool], tool_choice="any")
-    response = llm_with_tools.invoke(state["messages"])
-
-    return {"messages": [response]}
+    # Create tool call directly - no LLM call needed
+    tool_call = {
+        "name": "sql_db_schema",
+        "args": {"table_names": ""},  # Empty string gets all tables
+        "id": f"schema_call_{len(state['messages'])}",
+        "type": "tool_call",
+    }
+    tool_call_message = AIMessage(content="", tool_calls=[tool_call])
+    return {"messages": [tool_call_message]}
 
 TABLE_HINTS = """
 Tables:
