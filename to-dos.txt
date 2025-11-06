@@ -1,0 +1,20 @@
+1- tirar o nome da empresa da politica de devolucao, usar uma copia com outros nomes
+
+2- melhorar o front end (cor, botao enviar, logo da bix, nome de ferramenta)
+
+3- toda hora passar o pdf em todas as chamadas nao aumenta o custo?
+
+3- usar o lang smith para mostrar as tools sendo chamadas em cada passo
+
+4- criar uma rotina de teste unitario e evaluation. um script que rode em batelada 10 perguntas de teste sobre politica de troca, sobre algum pedido, etc e use um "ai as a judge" pra avaliar as respostas e ver que o modelo ta funcionando... pra cada pergunta vai ter um PASS ou FAILED
+Eduardo
+14:17
+1 - front em geral
+
+2 - precisa ser didático (começar simples e ir aumentando a complexidade explicando o que estamos fazendo), pra mostrar autoridade. So mostrar a solução pronta de forma "magica", tem varias na internet
+
+3 - layout do botão enviar; hora com segundos na resposta
+
+4 - ter exemplo de chamar uma tool que gere ação (pode ser criar uma devolução)
+
+5 - funcionar tudo certinho na hora

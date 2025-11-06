@@ -512,6 +512,22 @@ def should_process_return(state: AgentState) -> Literal["process_return", END]:
     return END
 
 
+def should_process_tool(state: AgentState) -> Literal["process_return", "analyze_seller_reliability", END]:
+    """Decide qual tool processar após resposta do answer_node"""
+    messages = state["messages"]
+    last_message = messages[-1] if messages else None
+    
+    # Verifica se a última mensagem é uma AIMessage com tool calls
+    if isinstance(last_message, AIMessage) and hasattr(last_message, "tool_calls") and last_message.tool_calls:
+        for tool_call in last_message.tool_calls:
+            tool_name = tool_call.get("name")
+            if tool_name == "process_order_return":
+                return "process_return"
+            elif tool_name == "analyze_seller_reliability":
+                return "analyze_seller_reliability"
+    return END
+
+
 # Build the graph
 builder = StateGraph(AgentState)
 
