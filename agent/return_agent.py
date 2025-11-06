@@ -387,14 +387,52 @@ def check_query(state: AgentState):
     return {"messages": [response]}
 
 
+def _should_use_tools(messages: list) -> bool:
+    """Determine if tools are needed based on conversation context."""
+    if not messages:
+        return False
+    
+    # Check recent messages (last 3) for relevant keywords
+    # Keywords that suggest tools might be needed
+    return_keywords = [
+        "devolver", "devolução", "cancelar", "cancelamento", 
+        "retornar", "retorno", "process_order_return", "return_requested",
+        "confirmo", "confirmar", "quero devolver", "quero cancelar"
+    ]
+    
+    seller_keywords = [
+        "vendedor", "seller", "confiável", "confiabilidade", 
+        "desempenho", "análise", "analyze_seller", "reliability",
+        "vendedores", "sellers", "não confiável", "unreliable"
+    ]
+    
+    # Check last few messages for keywords
+    recent_messages_text = ""
+    for msg in reversed(messages[-3:]):  # Check last 3 messages
+        if hasattr(msg, 'content') and msg.content:
+            recent_messages_text += " " + str(msg.content).lower()
+    
+    # Check if any message contains relevant keywords
+    has_return_keywords = any(keyword in recent_messages_text for keyword in return_keywords)
+    has_seller_keywords = any(keyword in recent_messages_text for keyword in seller_keywords)
+    
+    return has_return_keywords or has_seller_keywords
+
+
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
     print("Generating final answer...")
     messages = state["messages"]
     pdf_context = state.get("pdf_context", "")
 
-    # Disponibiliza as tools para o modelo
-    llm_with_tools = llm_answer.bind_tools([return_order_tool, seller_reliability_tool])
+    # Only bind tools if they might be needed (optimization to reduce latency)
+    use_tools = _should_use_tools(messages)
+    if use_tools:
+        print("Tools will be available (return/seller analysis)")
+        llm_with_tools = llm_answer.bind_tools([return_order_tool, seller_reliability_tool])
+    else:
+        print("No tools needed - using LLM without tools (faster)")
+        llm_with_tools = llm_answer  # No tools bound
 
     system_prompt = """
 <Cargo nome="João", funcao="gestor de pedidos e devolucoes">
