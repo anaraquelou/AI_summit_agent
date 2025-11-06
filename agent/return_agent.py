@@ -350,43 +350,6 @@ def generate_query(state: AgentState):
     return {"messages": [response]}
 
 
-check_query_system_prompt = """
-You are a SQL expert with a strong attention to detail.
-Double check the {dialect} query for common mistakes, including:
-- Using NOT IN with NULL values
-- Using UNION when UNION ALL should have been used
-- Using BETWEEN for exclusive ranges
-- Data type mismatch in predicates
-- Properly quoting identifiers
-- Using the correct number of arguments for functions
-- Casting to the correct data type
-- Using the proper columns for joins
-
-If there are any of the above mistakes, rewrite the query. If there are no mistakes,
-just reproduce the original query.
-
-You will call the appropriate tool to execute the query after running this check.
-""".format(dialect=db.dialect)
-
-
-def check_query(state: AgentState):
-    """Check and validate SQL query before execution."""
-    print("check_query tool")
-    system_message = {
-        "role": "system",
-        "content": check_query_system_prompt,
-    }
-
-    # Generate an artificial user message to check
-    tool_call = state["messages"][-1].tool_calls[0]
-    user_message = {"role": "user", "content": tool_call["args"]["query"]}
-    llm_with_tools = llm.bind_tools([run_query_tool], tool_choice="any")
-    response = llm_with_tools.invoke([system_message, user_message])
-    response.id = state["messages"][-1].id
-
-    return {"messages": [response]}
-
-
 def _should_use_tools(messages: list) -> bool:
     """Determine if tools are needed based on conversation context."""
     if not messages:
@@ -530,8 +493,8 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
     return {"decide_path": decision}
 
 
-def should_continue(state: AgentState) -> Literal[END, "check_query", "answer"]:
-    """Decide whether to continue with query checking or go to answer."""
+def should_continue(state: AgentState) -> Literal[END, "run_query", "answer"]:
+    """Decide whether to run query or go to answer."""
     print("should_continue")
     messages = state["messages"]
     last_message = messages[-1]
@@ -539,7 +502,8 @@ def should_continue(state: AgentState) -> Literal[END, "check_query", "answer"]:
     if not getattr(last_message, "tool_calls", None):
         return "answer"
     else:
-        return "check_query"
+        # Go directly to run_query (query validation removed for performance)
+        return "run_query"
 
 
 def should_process_return(state: AgentState) -> Literal["process_return", END]:
@@ -581,7 +545,6 @@ builder.add_node("list_tables", list_tables)
 builder.add_node("call_get_schema", call_get_schema)
 builder.add_node("get_schema", get_schema_node)
 builder.add_node("generate_query", generate_query)
-builder.add_node("check_query", check_query)
 builder.add_node("run_query", run_query_node)
 
 # Optional: a final answer node that uses PDF/SQL context to respond
@@ -620,8 +583,14 @@ builder.add_conditional_edges(
 builder.add_edge("list_tables", "call_get_schema")
 builder.add_edge("call_get_schema", "get_schema")
 builder.add_edge("get_schema", "generate_query")
-builder.add_conditional_edges("generate_query", should_continue)
-builder.add_edge("check_query", "run_query")
+builder.add_conditional_edges(
+    "generate_query",
+    should_continue,
+    {
+        "run_query": "run_query",
+        "answer": "answer",
+    }
+)
 builder.add_edge("run_query", "answer")  # After running query, go to answer node
 
 # End of pipeline - check if answer node wants to process any tool
