@@ -91,6 +91,104 @@ return_order_tool = StructuredTool.from_function(
 return_order_node = ToolNode([return_order_tool], name="process_return")
 
 
+def analyze_seller_reliability(start_date: str, end_date: str) -> str:
+    """Analyzes seller reliability based on late delivery rate and average review score.
+    
+    A seller is considered unreliable if they have more than 5% of orders delivered late
+    AND an average review score below 3.5 within the specified date range.
+    
+    Args:
+        start_date: Start date in format 'YYYY-MM-DD'
+        end_date: End date in format 'YYYY-MM-DD'
+        
+    Returns:
+        Formatted string with analysis results showing unreliable sellers
+    """
+    try:
+        conn = sqlite3.connect(str(DB_PATH))
+        cursor = conn.cursor()
+        
+        # Query to calculate seller reliability metrics
+        query = """
+        WITH seller_metrics AS (
+            SELECT 
+                oi.seller_id,
+                COUNT(DISTINCT o.order_id) as total_orders,
+                SUM(CASE 
+                    WHEN o.order_delivered_customer_date IS NOT NULL 
+                    AND o.order_estimated_delivery_date IS NOT NULL
+                    AND date(o.order_delivered_customer_date) > date(o.order_estimated_delivery_date)
+                    THEN 1 
+                    ELSE 0 
+                END) as late_orders,
+                AVG(or_review.review_score) as avg_review_score
+            FROM order_items oi
+            INNER JOIN orders o ON oi.order_id = o.order_id
+            LEFT JOIN order_reviews or_review ON o.order_id = or_review.order_id
+            WHERE date(o.order_purchase_timestamp) >= date(?)
+            AND date(o.order_purchase_timestamp) <= date(?)
+            AND o.order_status = 'delivered'
+            GROUP BY oi.seller_id
+        )
+        SELECT 
+            sm.seller_id,
+            s.seller_city,
+            s.seller_state,
+            sm.total_orders,
+            sm.late_orders,
+            ROUND(CAST(sm.late_orders AS FLOAT) / sm.total_orders * 100, 2) as late_percentage,
+            ROUND(COALESCE(sm.avg_review_score, 0), 2) as avg_review_score
+        FROM seller_metrics sm
+        INNER JOIN sellers s ON sm.seller_id = s.seller_id
+        WHERE (CAST(sm.late_orders AS FLOAT) / sm.total_orders * 100) > 5.0
+        AND COALESCE(sm.avg_review_score, 0) < 3.5
+        ORDER BY late_percentage DESC, avg_review_score ASC
+        """
+        
+        cursor.execute(query, (start_date, end_date))
+        results = cursor.fetchall()
+        conn.close()
+        
+        if not results:
+            return f"Nenhum vendedor não confiável encontrado no período de {start_date} a {end_date}."
+        
+        # Format results
+        result_lines = [
+            f"Vendedores não confiáveis no período de {start_date} a {end_date}:",
+            "",
+            "=" * 80
+        ]
+        
+        for row in results:
+            seller_id, city, state, total_orders, late_orders, late_pct, avg_score = row
+            result_lines.append(
+                f"Vendedor: {seller_id} | {city}, {state}\n"
+                f"  - Total de pedidos: {total_orders}\n"
+                f"  - Pedidos atrasados: {late_orders} ({late_pct}%)\n"
+                f"  - Nota média de reviews: {avg_score}/5.0"
+            )
+            result_lines.append("-" * 80)
+        
+        result_lines.append(
+            f"\nTotal de vendedores não confiáveis: {len(results)}"
+        )
+        
+        return "\n".join(result_lines)
+        
+    except Exception as e:
+        return f"Erro ao analisar confiabilidade dos vendedores: {str(e)}"
+
+
+# Create seller reliability analysis tool
+seller_reliability_tool = StructuredTool.from_function(
+    func=analyze_seller_reliability,
+    name="analyze_seller_reliability",
+    description="Analisa a confiabilidade dos vendedores com base em pedidos atrasados e avaliações. Um vendedor é considerado não confiável se tiver mais de 5% dos pedidos atrasados E nota média de review abaixo de 3.5. Use esta ferramenta quando o usuário perguntar sobre vendedores com desempenho ruim, violação de regras internas, ou análise de confiabilidade de vendedores. Parâmetros: start_date (formato 'YYYY-MM-DD') e end_date (formato 'YYYY-MM-DD')."
+)
+
+seller_reliability_node = ToolNode([seller_reliability_tool], name="analyze_seller_reliability")
+
+
 def pdf_branch(state: AgentState) -> AgentState:
     """Load and serialize PDF content into state."""
     print("Running PDF branch...")
@@ -290,8 +388,8 @@ def answer_node(state: AgentState) -> AgentState:
     messages = state["messages"]
     pdf_context = state.get("pdf_context", "")
 
-    # Disponibiliza a tool de devolução para o modelo
-    llm_with_tools = llm_answer.bind_tools([return_order_tool])
+    # Disponibiliza as tools para o modelo
+    llm_with_tools = llm_answer.bind_tools([return_order_tool, seller_reliability_tool])
 
     system_prompt = """
 <Cargo nome="João", funcao="gestor de pedidos e devolucoes">
@@ -430,6 +528,7 @@ builder.add_node("run_query", run_query_node)
 # Optional: a final answer node that uses PDF/SQL context to respond
 builder.add_node("answer", answer_node)
 builder.add_node("process_return", return_order_node)
+builder.add_node("analyze_seller_reliability", seller_reliability_node)
 
 # Add routing edges
 builder.add_edge(START, "decide_path")
@@ -466,17 +565,19 @@ builder.add_conditional_edges("generate_query", should_continue)
 builder.add_edge("check_query", "run_query")
 builder.add_edge("run_query", "answer")  # After running query, go to answer node
 
-# End of pipeline - check if answer node wants to process return
+# End of pipeline - check if answer node wants to process any tool
 builder.add_conditional_edges(
     "answer",
-    should_process_return,
+    should_process_tool,
     {
         "process_return": "process_return",
+        "analyze_seller_reliability": "analyze_seller_reliability",
         END: END,
     },
 )
-# After processing return, go back to answer node for final confirmation
+# After processing tools, go back to answer node for final confirmation
 builder.add_edge("process_return", "answer")
+builder.add_edge("analyze_seller_reliability", "answer")
 
 # Compile the agent with checkpointing
 checkpointer = InMemorySaver()
