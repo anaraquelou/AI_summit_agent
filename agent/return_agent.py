@@ -91,15 +91,16 @@ return_order_tool = StructuredTool.from_function(
 return_order_node = ToolNode([return_order_tool], name="process_return")
 
 
-def analyze_seller_reliability(start_date: str, end_date: str) -> str:
+def analyze_seller_reliability(start_date: str = None, end_date: str = None) -> str:
     """Analyzes seller reliability based on late delivery rate and average review score.
     
     A seller is considered unreliable if they have more than 5% of orders delivered late
     AND an average review score below 3.5 within the specified date range.
+    If dates are not provided, analyzes all available data.
     
     Args:
-        start_date: Start date in format 'YYYY-MM-DD'
-        end_date: End date in format 'YYYY-MM-DD'
+        start_date: Optional start date in format 'YYYY-MM-DD'. If None, uses all available data.
+        end_date: Optional end date in format 'YYYY-MM-DD'. If None, uses all available data.
         
     Returns:
         Formatted string with analysis results showing unreliable sellers
@@ -108,8 +109,22 @@ def analyze_seller_reliability(start_date: str, end_date: str) -> str:
         conn = sqlite3.connect(str(DB_PATH))
         cursor = conn.cursor()
         
+        # Build WHERE clause based on provided parameters
+        where_conditions = ["o.order_status = 'delivered'"]
+        query_params = []
+        
+        if start_date:
+            where_conditions.append("date(o.order_purchase_timestamp) >= date(?)")
+            query_params.append(start_date)
+        
+        if end_date:
+            where_conditions.append("date(o.order_purchase_timestamp) <= date(?)")
+            query_params.append(end_date)
+        
+        where_clause = " AND ".join(where_conditions)
+        
         # Query to calculate seller reliability metrics
-        query = """
+        query = f"""
         WITH seller_metrics AS (
             SELECT 
                 oi.seller_id,
@@ -125,9 +140,7 @@ def analyze_seller_reliability(start_date: str, end_date: str) -> str:
             FROM order_items oi
             INNER JOIN orders o ON oi.order_id = o.order_id
             LEFT JOIN order_reviews or_review ON o.order_id = or_review.order_id
-            WHERE date(o.order_purchase_timestamp) >= date(?)
-            AND date(o.order_purchase_timestamp) <= date(?)
-            AND o.order_status = 'delivered'
+            WHERE {where_clause}
             GROUP BY oi.seller_id
         )
         SELECT 
@@ -145,16 +158,27 @@ def analyze_seller_reliability(start_date: str, end_date: str) -> str:
         ORDER BY late_percentage DESC, avg_review_score ASC
         """
         
-        cursor.execute(query, (start_date, end_date))
+        cursor.execute(query, query_params)
         results = cursor.fetchall()
         conn.close()
         
+        # Format date range text
+        date_range_text = ""
+        if start_date and end_date:
+            date_range_text = f" no período de {start_date} a {end_date}"
+        elif start_date:
+            date_range_text = f" a partir de {start_date}"
+        elif end_date:
+            date_range_text = f" até {end_date}"
+        else:
+            date_range_text = " (todos os dados disponíveis)"
+        
         if not results:
-            return f"Nenhum vendedor não confiável encontrado no período de {start_date} a {end_date}."
+            return f"Nenhum vendedor não confiável encontrado{date_range_text}."
         
         # Format results
         result_lines = [
-            f"Vendedores não confiáveis no período de {start_date} a {end_date}:",
+            f"Vendedores não confiáveis{date_range_text}:",
             "",
             "=" * 80
         ]
@@ -183,7 +207,7 @@ def analyze_seller_reliability(start_date: str, end_date: str) -> str:
 seller_reliability_tool = StructuredTool.from_function(
     func=analyze_seller_reliability,
     name="analyze_seller_reliability",
-    description="Analisa a confiabilidade dos vendedores com base em pedidos atrasados e avaliações. Um vendedor é considerado não confiável se tiver mais de 5% dos pedidos atrasados E nota média de review abaixo de 3.5. Use esta ferramenta quando o usuário perguntar sobre vendedores com desempenho ruim, violação de regras internas, ou análise de confiabilidade de vendedores. Parâmetros: start_date (formato 'YYYY-MM-DD') e end_date (formato 'YYYY-MM-DD')."
+    description="Analisa a confiabilidade dos vendedores com base em pedidos atrasados e avaliações. Um vendedor é considerado não confiável se tiver mais de 5% dos pedidos atrasados E nota média de review abaixo de 3.5. Use esta ferramenta quando o usuário perguntar sobre vendedores com desempenho ruim, violação de regras internas, ou análise de confiabilidade de vendedores. Parâmetros: start_date (opcional, formato 'YYYY-MM-DD') e end_date (opcional, formato 'YYYY-MM-DD'). Se as datas não forem fornecidas, a análise será feita com todos os dados disponíveis."
 )
 
 seller_reliability_node = ToolNode([seller_reliability_tool], name="analyze_seller_reliability")
@@ -422,6 +446,7 @@ Você é extremamente simpático e amigável e sempre trata as pessoas com Sr. o
 - Se algo não for possível responder, diga claramente o motivo e sugira um próximo passo útil.
 - Quando a pergunta envolver devolução de um pedido específico, pergunte o número do pedido e verifique no banco de dados as informações e cruze com as regras do PDF para determinar se o pedido é elegível para devolução.
 - Quando o usuário CONFIRMAR que deseja devolver ou cancelar um pedido específico, use a ferramenta process_order_return para atualizar o status do pedido para 'return_requested'.
+- Quando o usuário perguntar sobre análise de confiabilidade de vendedores e NÃO fornecer as datas (start_date e end_date), você DEVE perguntar ao usuário qual período ele deseja analisar antes de usar a ferramenta analyze_seller_reliability. Peça as datas no formato 'YYYY-MM-DD' (ex: "Para analisar a confiabilidade dos vendedores, preciso saber o período. Por favor, informe a data inicial e a data final no formato YYYY-MM-DD").
 - Seja preciso, transparente e profissional.
 - Sempre responda em português claro e direto.
 - Use tom cordial, mas objetivo.
