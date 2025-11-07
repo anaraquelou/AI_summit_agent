@@ -483,9 +483,8 @@ lojavirtual@bix.com | Whataspp: +55 11 4862-7901
     prompt_messages = [SystemMessage(content=system_prompt)] + list(messages)
     response = llm_with_tools.invoke(prompt_messages)
 
-    # Append the model's answer to the conversation
-    state["messages"].append(response)
-    return state
+    # Return message to be added by LangGraph's add_messages
+    return {"messages": [response]}
 
 
 def decide_path(state: AgentState, config: RunnableConfig) -> dict:
