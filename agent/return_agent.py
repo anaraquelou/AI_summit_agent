@@ -10,7 +10,7 @@ from typing import Annotated, Sequence, TypedDict, Literal
 from pathlib import Path
 
 from langchain_openai import ChatOpenAI
-from langchain_core.messages import BaseMessage, SystemMessage, AIMessage
+from langchain_core.messages import BaseMessage, SystemMessage, AIMessage, ToolMessage, HumanMessage
 from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 from langchain_community.utilities.sql_database import SQLDatabase
@@ -405,10 +405,54 @@ def _should_use_tools(messages: list) -> bool:
     return has_return_keywords or has_seller_keywords
 
 
+def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
+    """Reducer that preserves all valid tool_call → tool response pairs."""
+
+    # --- STEP 1: Collect messages we might keep ---
+    user_msgs = []
+    ai_msgs = []
+
+    for msg in reversed(messages):
+
+        if isinstance(msg, HumanMessage) and len(user_msgs) < keep_last_user:
+            user_msgs.append(msg)
+            continue
+        
+        if isinstance(msg, AIMessage) and len(ai_msgs) < keep_last_ai:
+            ai_msgs.append(msg)
+            continue
+
+        # Ignore the rest for now (we’ll add matching tool msgs later)
+    
+    # --- STEP 2: Collect all required tool_call_ids ---
+    required_tool_ids = set()
+    for ai in ai_msgs:
+        if ai.tool_calls:
+            for tc in ai.tool_calls:
+                tc_id = tc.get("id")
+                if tc_id:
+                    required_tool_ids.add(tc_id)
+    
+    # --- STEP 3: Collect all ToolMessages matching the IDs ---
+    tool_msgs = []
+    for msg in reversed(messages):
+        if isinstance(msg, ToolMessage) and msg.tool_call_id in required_tool_ids:
+            tool_msgs.append(msg)
+
+    # MUST preserve chronological order
+    ai_msgs = list(reversed(ai_msgs))
+    tool_msgs = list(reversed(tool_msgs))
+    user_msgs = list(reversed(user_msgs))
+
+    # Final order must be: AI → Tool → User
+    return ai_msgs + tool_msgs + user_msgs
+
+
+
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
     print("Generating final answer...")
-    messages = state["messages"]
+    messages = reduce_messages(state["messages"])
     pdf_context = state.get("pdf_context", "")
 
     # Only bind tools if they might be needed (optimization to reduce latency)
@@ -446,12 +490,11 @@ Você é extremamente simpático e amigável e sempre trata as pessoas com Sr. o
 - Se algo não for possível responder, diga claramente o motivo e sugira um próximo passo útil.
 - Quando a pergunta envolver devolução de um pedido específico, pergunte o número do pedido e verifique no banco de dados as informações e cruze com as regras do PDF para determinar se o pedido é elegível para devolução.
 - Quando o usuário CONFIRMAR que deseja devolver ou cancelar um pedido específico, use a ferramenta process_order_return para atualizar o status do pedido para 'return_requested'.
-- Quando o usuário perguntar sobre análise de confiabilidade de vendedores e NÃO fornecer as datas (start_date e end_date), você DEVE perguntar ao usuário qual período ele deseja analisar antes de usar a ferramenta analyze_seller_reliability.
+- Sempre tente responder a pergunta do usuário com considerações próprias sem retornar com outra pergunta.
 - Seja preciso, transparente e profissional.
 - Sempre responda em português claro e direto.
 - Use tom cordial, mas objetivo.
 - Responda APENAS com o resultado final.
-- Nunca invente informações não presentes no PDF ou no banco de dados.
 - Se o usuário fizer perguntas fora do escopo (ex: sobre sua identidade), responda de forma curta e educada.
 </Instruções>
 
@@ -478,6 +521,7 @@ lojavirtual@bix.com | Whataspp: +55 11 4862-7901
 - Não narre ações internas.
 - Não repita texto.
 - Não gere passos intermediários.
+- Nunca invente informações não presentes no PDF ou no banco de dados.
 </Não fazer>
 """
 
