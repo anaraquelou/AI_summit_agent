@@ -36,8 +36,7 @@ class AgentState(TypedDict):
 
 # Initialize LLMs
 llm = ChatOpenAI(model="gpt-5", temperature=0)
-llm_router = ChatOpenAI(model="gpt-5", temperature=0)
-llm_answer = ChatOpenAI(model="gpt-5", temperature=0)
+llm_answer = ChatOpenAI(model="gpt-5", temperature=0, reasoning_effort="low")
 
 # Initialize database
 db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
@@ -507,7 +506,7 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
         "- 'Quem é você?' → general"
     )
 
-    response = llm_router.invoke([SystemMessage(system_prompt)] + [last_message], config)
+    response = llm.invoke([SystemMessage(system_prompt)] + [last_message], config)
     
     decision = response.content.strip().lower()
     print(f"decision: {decision}")
