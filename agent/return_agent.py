@@ -368,7 +368,7 @@ def generate_query(state: AgentState):
     # We do not force a tool call here, to allow the model to
     # respond naturally when it obtains the solution.
     llm_with_tools = llm.bind_tools([run_query_tool])
-    response = llm_with_tools.invoke([system_message] + state["messages"])
+    response = llm_with_tools.invoke([system_message] + reduce_messages(state["messages"]))
 
     return {"messages": [response]}
 
