@@ -6,6 +6,7 @@ users check order eligibility for returns and process return requests.
 """
 
 import sqlite3
+import re
 from typing import Annotated, Sequence, TypedDict, Literal
 from pathlib import Path
 
@@ -31,7 +32,7 @@ class AgentState(TypedDict):
     """State of the agent. Contains messages, PDF content, and routing info."""
     messages: Annotated[Sequence[BaseMessage], add_messages]
     pdf_context: str
-    decide_path: Literal["sql_branch", "pdf_branch", "pdf_sql_branch", "general"]
+    decide_path: Literal["sql_branch", "pdf_branch", "pdf_sql_branch", "process_return", "analyze_seller_reliability", "general"]
 
 
 # Initialize LLMs
@@ -90,19 +91,119 @@ return_order_tool = StructuredTool.from_function(
 return_order_node = ToolNode([return_order_tool], name="process_return")
 
 
-def analyze_seller_reliability(start_date: str = None, end_date: str = None) -> str:
+def process_return_node(state: AgentState) -> AgentState:
+    """Process return order - extract order_id and call tool directly."""
+    print("process_return_node: calling tool directly")
+    messages = state["messages"]
+    last_message = messages[-1] if messages else None
+    
+    if not isinstance(last_message, HumanMessage):
+        # If already has tool call, use ToolNode
+        result = return_order_node.invoke(state)
+        # Return final answer instead of going to answer node
+        tool_result = result["messages"][-1] if result.get("messages") else None
+        if isinstance(tool_result, ToolMessage):
+            final_response = AIMessage(content=tool_result.content)
+            return {"messages": [final_response]}
+        return result
+    
+    # Extract order_id directly from user message
+    user_text = str(last_message.content)
+    
+    # Try to find order_id pattern (alphanumeric string, typically 32 chars)
+    order_id_pattern = r'\b[a-f0-9]{20,}\b'
+    matches = re.findall(order_id_pattern, user_text, re.IGNORECASE)
+    
+    if matches:
+        order_id = matches[0]
+    else:
+        # Try to find any word that looks like an order ID
+        words = user_text.split()
+        # Look for words that are longer than 10 chars (likely order IDs)
+        order_id = next((w for w in words if len(w) > 10), None)
+        if not order_id:
+            # Fallback: use first significant word or return error
+            order_id = words[0] if words else ""
+    
+    # Call tool directly
+    result = process_order_return(order_id)
+    
+    # Return final answer
+    final_response = AIMessage(content=result)
+    return {"messages": [final_response]}
+
+
+def analyze_seller_reliability_node_custom(state: AgentState) -> AgentState:
+    """Analyze seller reliability - extract parameters and call tool directly."""
+    print("analyze_seller_reliability_node_custom: calling tool directly")
+    messages = state["messages"]
+    last_message = messages[-1] if messages else None
+    
+    if not isinstance(last_message, HumanMessage):
+        # If already has tool call, use ToolNode
+        result = seller_reliability_node.invoke(state)
+        # Return final answer instead of going to answer node
+        tool_result = result["messages"][-1] if result.get("messages") else None
+        if isinstance(tool_result, ToolMessage):
+            final_response = AIMessage(content=tool_result.content)
+            return {"messages": [final_response]}
+        return result
+    
+    # Extract parameters directly from user message
+    user_text = str(last_message.content)
+    
+    # Try to find seller_id (alphanumeric string, typically 32 chars)
+    seller_id_pattern = r'\b[a-f0-9]{20,}\b'
+    seller_matches = re.findall(seller_id_pattern, user_text, re.IGNORECASE)
+    seller_id = seller_matches[0] if seller_matches else None
+    
+    # Try to find "top N" pattern (e.g., "top 3", "top 5", "top 10")
+    top_n_pattern = r'\btop\s+(\d+)\b'
+    top_n_match = re.search(top_n_pattern, user_text, re.IGNORECASE)
+    limit = int(top_n_match.group(1)) if top_n_match else None
+    
+    # Try to find dates in format YYYY-MM-DD
+    date_pattern = r'\b(\d{4}-\d{2}-\d{2})\b'
+    dates = re.findall(date_pattern, user_text)
+    
+    start_date = None
+    end_date = None
+    
+    if len(dates) >= 1:
+        start_date = dates[0]
+    if len(dates) >= 2:
+        end_date = dates[1]
+    elif len(dates) == 1:
+        # If only one date found, check context to determine if it's start or end
+        # For simplicity, treat as start_date
+        start_date = dates[0]
+    
+    # Call tool directly
+    result = analyze_seller_reliability(seller_id=seller_id, start_date=start_date, end_date=end_date, limit=limit)
+    
+    # Return final answer
+    final_response = AIMessage(content=result)
+    return {"messages": [final_response]}
+
+
+def analyze_seller_reliability(seller_id: str = None, start_date: str = None, end_date: str = None, limit: int = None) -> str:
     """Analyzes seller reliability based on late delivery rate and average review score.
     
     A seller is considered unreliable if they have more than 5% of orders delivered late
     AND an average review score below 3.5 within the specified date range.
     If dates are not provided, analyzes all available data.
+    If seller_id is provided, analyzes only that specific seller.
+    If limit is provided, returns only the top N sellers (ordered by worst performance).
     
     Args:
+        seller_id: Optional seller ID to analyze. If provided, returns yes/no answer for that seller.
         start_date: Optional start date in format 'YYYY-MM-DD'. If None, uses all available data.
         end_date: Optional end date in format 'YYYY-MM-DD'. If None, uses all available data.
+        limit: Optional limit for number of results (e.g., 3 for "top 3").
         
     Returns:
-        Formatted string with analysis results showing unreliable sellers
+        Formatted string with analysis results. If seller_id is provided, returns yes/no answer.
+        Otherwise, returns list of unreliable sellers (limited if limit is provided).
     """
     try:
         conn = sqlite3.connect(str(DB_PATH))
@@ -111,6 +212,10 @@ def analyze_seller_reliability(start_date: str = None, end_date: str = None) -> 
         # Build WHERE clause based on provided parameters
         where_conditions = ["o.order_status = 'delivered'"]
         query_params = []
+        
+        if seller_id:
+            where_conditions.append("oi.seller_id = ?")
+            query_params.append(seller_id)
         
         if start_date:
             where_conditions.append("date(o.order_purchase_timestamp) >= date(?)")
@@ -157,8 +262,39 @@ def analyze_seller_reliability(start_date: str = None, end_date: str = None) -> 
         ORDER BY late_percentage DESC, avg_review_score ASC
         """
         
+        # Add LIMIT if specified
+        if limit is not None:
+            query += f" LIMIT {limit}"
+        
         cursor.execute(query, query_params)
         results = cursor.fetchall()
+        
+        # If seller_id was provided, return yes/no answer
+        if seller_id:
+            if results:
+                # Seller is unreliable
+                row = results[0]
+                seller_id_result, city, state, total_orders, late_orders, late_pct, avg_score = row
+                conn.close()
+                return (
+                    f"Sim, o seller {seller_id} é considerado não confiável.\n"
+                    f"Motivos:\n"
+                    f"- Taxa de pedidos atrasados: {late_pct}% (acima de 5%)\n"
+                    f"- Nota média de reviews: {avg_score}/5.0 (abaixo de 3.5)\n"
+                    f"- Total de pedidos analisados: {total_orders}\n"
+                    f"- Pedidos atrasados: {late_orders}"
+                )
+            else:
+                # Check if seller exists at all (connection still open from query above)
+                cursor.execute("SELECT seller_id FROM sellers WHERE seller_id = ?", (seller_id,))
+                seller_exists = cursor.fetchone()
+                conn.close()
+                
+                if seller_exists:
+                    return f"Não, o seller {seller_id} é considerado confiável (taxa de atrasos <= 5% e nota média >= 3.5)."
+                else:
+                    return f"Erro: Seller {seller_id} não encontrado no banco de dados."
+        
         conn.close()
         
         # Format date range text
@@ -176,25 +312,31 @@ def analyze_seller_reliability(start_date: str = None, end_date: str = None) -> 
             return f"Nenhum vendedor não confiável encontrado{date_range_text}."
         
         # Format results
+        limit_text = f" (top {limit})" if limit else ""
         result_lines = [
-            f"Vendedores não confiáveis{date_range_text}:",
+            f"Vendedores não confiáveis{limit_text}{date_range_text}:",
             "",
             "=" * 80
         ]
         
         for row in results:
-            seller_id, city, state, total_orders, late_orders, late_pct, avg_score = row
+            seller_id_result, city, state, total_orders, late_orders, late_pct, avg_score = row
             result_lines.append(
-                f"Vendedor: {seller_id} | {city}, {state}\n"
+                f"Vendedor: {seller_id_result} | {city}, {state}\n"
                 f"  - Total de pedidos: {total_orders}\n"
                 f"  - Pedidos atrasados: {late_orders} ({late_pct}%)\n"
                 f"  - Nota média de reviews: {avg_score}/5.0"
             )
             result_lines.append("-" * 80)
         
-        result_lines.append(
-            f"\nTotal de vendedores não confiáveis: {len(results)}"
-        )
+        if limit:
+            result_lines.append(
+                f"\nMostrando top {limit} vendedores não confiáveis."
+            )
+        else:
+            result_lines.append(
+                f"\nTotal de vendedores não confiáveis: {len(results)}"
+            )
         
         return "\n".join(result_lines)
         
@@ -206,7 +348,7 @@ def analyze_seller_reliability(start_date: str = None, end_date: str = None) -> 
 seller_reliability_tool = StructuredTool.from_function(
     func=analyze_seller_reliability,
     name="analyze_seller_reliability",
-    description="Analisa a confiabilidade dos vendedores com base em pedidos atrasados e avaliações. Um vendedor é considerado não confiável se tiver mais de 5% dos pedidos atrasados E nota média de review abaixo de 3.5. Use esta ferramenta quando o usuário perguntar sobre vendedores com desempenho ruim, violação de regras internas, ou análise de confiabilidade de vendedores. Parâmetros: start_date (opcional, formato 'YYYY-MM-DD') e end_date (opcional, formato 'YYYY-MM-DD'). Se as datas não forem fornecidas, a análise será feita com todos os dados disponíveis."
+    description="Analisa a confiabilidade dos vendedores com base em pedidos atrasados e avaliações. Um vendedor é considerado não confiável se tiver mais de 5% dos pedidos atrasados E nota média de review abaixo de 3.5. Use esta ferramenta quando o usuário perguntar sobre vendedores com desempenho ruim, violação de regras internas, ou análise de confiabilidade de vendedores. Parâmetros: seller_id (opcional, ID do vendedor específico), start_date (opcional, formato 'YYYY-MM-DD'), end_date (opcional, formato 'YYYY-MM-DD') e limit (opcional, número para limitar resultados, ex: 3 para 'top 3'). Se seller_id for fornecido, retorna resposta sim/não para aquele vendedor. Se limit for fornecido, retorna apenas os top N vendedores não confiáveis. Se as datas não forem fornecidas, a análise será feita com todos os dados disponíveis."
 )
 
 seller_reliability_node = ToolNode([seller_reliability_tool], name="analyze_seller_reliability")
@@ -452,17 +594,9 @@ def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
     print("Generating final answer...")
-    messages = reduce_messages(state["messages"])
+    messages = reduce_messages(state["messages"], keep_last_user=2, keep_last_ai=2)
     pdf_context = state.get("pdf_context", "")
 
-    # Only bind tools if they might be needed (optimization to reduce latency)
-    use_tools = _should_use_tools(messages)
-    if use_tools:
-        print("Tools will be available (return/seller analysis)")
-        llm_with_tools = llm_answer.bind_tools([return_order_tool, seller_reliability_tool])
-    else:
-        print("No tools needed - using LLM without tools (faster)")
-        llm_with_tools = llm_answer  # No tools bound
 
     system_prompt = """
 <Cargo nome="João" funcao="analista sênior de dados de E-commerce">
@@ -478,13 +612,20 @@ Seu tom é direto, profissional e objetivo, como um colega analista experiente.
 <Instruções>
 - Seja sucinto e objetivo. Responda como um analista falando com outro analista.
 - Apresente apenas a lógica essencial utilizada na conclusão, sem narrar ações internas 
-  (ex: “consultando”, “processando”, “buscando”).
+  (ex: "consultando", "processando", "buscando").
 - Se não houver dados suficientes, diga exatamente o que falta e siga com o próximo passo útil.
 - Quando a pergunta envolver devolução de um pedido, solicite o número do pedido e cruze os 
   dados com a política do PDF.
 - Apenas processe a devolução após confirmação explícita do usuário.
 - Evite devolver perguntas desnecessárias; tente sempre avançar com a análise.
 - Nunca invente informações além do que está no banco ou no PDF.
+- Quando receber resultados de análise de vendedores (especialmente listas com separadores como === ou ---), 
+  reformate completamente para uma resposta natural e legível:
+  * Remova TODOS os separadores (===, ---, linhas vazias excessivas)
+  * Use formatação de lista numerada ou com bullets
+  * Apresente cada vendedor em uma linha concisa com as informações principais
+  * Não repita cabeçalhos ou informações redundantes
+  * Transforme dados técnicos em linguagem natural
 </Instruções>
 
 <Exemplos>
@@ -495,7 +636,13 @@ Usuário: Qual é o prazo máximo para devolução?
 Agente: O prazo máximo é de 30 dias corridos após o recebimento.
 
 Usuário: Status do pedido 5678.
-Agente: O pedido 5678 está com status “Devolução solicitada”.
+Agente: O pedido 5678 está com status "Devolução solicitada".
+
+Usuário: Quais os top 3 vendedores menos confiáveis?
+Agente: Os top 3 vendedores menos confiáveis são:
+1. 8d92f3ea807b89465643c219455e7369 (São Paulo, SP): 233% de pedidos atrasados, nota média 1.0/5.0
+2. 4e42581f08e8cfc7c090f930bac4552a (Porto Ferreira, SP): 200% de pedidos atrasados, nota média 1.0/5.0
+3. 2a50b7ee5aebecc6fd0ff9784a4747d6 (Brasília, DF): 200% de pedidos atrasados, nota média 1.0/5.0
 </Exemplos>
 
 <Não fazer>
@@ -510,7 +657,7 @@ Agente: O pedido 5678 está com status “Devolução solicitada”.
 
     # Use full conversation history so the model has memory
     prompt_messages = [SystemMessage(content=system_prompt)] + list(messages)
-    response = llm_with_tools.invoke(prompt_messages)
+    response = llm_answer.invoke(prompt_messages)
 
     # Return message to be added by LangGraph's add_messages
     return {"messages": [response]}
@@ -528,11 +675,17 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
         "- 'sql_branch': a pergunta necessita apenas do banco de dados.\n"
         "- 'pdf_branch': a pergunta necessita apenas do PDF.\n"
         "- 'pdf_sql_branch': a pergunta necessita tanto do banco de dados quanto do PDF.\n"
+        "- 'process_return': a pergunta claramente pede para processar/devolver um pedido específico (ex: 'devolver pedido X', 'processar devolução do pedido Y').\n"
+        "- 'analyze_seller_reliability': a pergunta claramente pede análise de confiabilidade de vendedor(es) (ex: 'o seller X é confiável?', 'quais sellers são não confiáveis?').\n"
         "- 'general': nenhuma ferramenta necessária.\n\n"
         "Exemplos:\n"
         "- 'Quais clientes pediram mais de 5 itens?' → sql_branch\n"
         "- 'Qual é a política de devolução?' → pdf_branch\n"
         "- 'O pedido e481f51... é elegível para devolução de acordo com a política?' → pdf_sql_branch\n"
+        "- 'Devolver o pedido e481f51...' → process_return\n"
+        "- 'Processar devolução do pedido 12345' → process_return\n"
+        "- 'O seller 3442f8959a84dea7ee197c632cb2df15 é confiável?' → analyze_seller_reliability\n"
+        "- 'Quais sellers são não confiáveis?' → analyze_seller_reliability\n"
         "- 'Quem é você?' → general"
     )
 
@@ -541,7 +694,8 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
     decision = response.content.strip().lower()
     print(f"decision: {decision}")
 
-    if decision not in {"sql_branch", "pdf_branch", "pdf_sql_branch", "general"}:
+    valid_decisions = {"sql_branch", "pdf_branch", "pdf_sql_branch", "process_return", "analyze_seller_reliability", "general"}
+    if decision not in valid_decisions:
         decision = "general"
     return {"decide_path": decision}
 
@@ -559,35 +713,6 @@ def should_continue(state: AgentState) -> Literal[END, "run_query", "answer"]:
         return "run_query"
 
 
-def should_process_return(state: AgentState) -> Literal["process_return", END]:
-    """Decide se deve processar devolução após resposta do answer_node"""
-    messages = state["messages"]
-    last_message = messages[-1] if messages else None
-    
-    # Verifica se a última mensagem é uma AIMessage com tool calls de devolução
-    if isinstance(last_message, AIMessage) and hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        for tool_call in last_message.tool_calls:
-            if tool_call.get("name") == "process_order_return":
-                return "process_return"
-    return END
-
-
-def should_process_tool(state: AgentState) -> Literal["process_return", "analyze_seller_reliability", END]:
-    """Decide qual tool processar após resposta do answer_node"""
-    messages = state["messages"]
-    last_message = messages[-1] if messages else None
-    
-    # Verifica se a última mensagem é uma AIMessage com tool calls
-    if isinstance(last_message, AIMessage) and hasattr(last_message, "tool_calls") and last_message.tool_calls:
-        for tool_call in last_message.tool_calls:
-            tool_name = tool_call.get("name")
-            if tool_name == "process_order_return":
-                return "process_return"
-            elif tool_name == "analyze_seller_reliability":
-                return "analyze_seller_reliability"
-    return END
-
-
 # Build the graph
 builder = StateGraph(AgentState)
 
@@ -602,8 +727,8 @@ builder.add_node("run_query", run_query_node)
 
 # Optional: a final answer node that uses PDF/SQL context to respond
 builder.add_node("answer", answer_node)
-builder.add_node("process_return", return_order_node)
-builder.add_node("analyze_seller_reliability", seller_reliability_node)
+builder.add_node("process_return", process_return_node)
+builder.add_node("analyze_seller_reliability", analyze_seller_reliability_node_custom)
 
 # Add routing edges
 builder.add_edge(START, "decide_path")
@@ -615,6 +740,8 @@ builder.add_conditional_edges(
         "sql_branch": "list_tables",
         "pdf_branch": "pdf_branch",
         "pdf_sql_branch": "pdf_branch",  # then we'll chain SQL after PDF
+        "process_return": "process_return",
+        "analyze_seller_reliability": "analyze_seller_reliability",
         "general": "answer",
     }
 )
@@ -645,20 +772,10 @@ builder.add_conditional_edges(
     }
 )
 builder.add_edge("run_query", "answer")  # After running query, go to answer node
-
-# End of pipeline - check if answer node wants to process any tool
-builder.add_conditional_edges(
-    "answer",
-    should_process_tool,
-    {
-        "process_return": "process_return",
-        "analyze_seller_reliability": "analyze_seller_reliability",
-        END: END,
-    },
-)
-# After processing tools, go back to answer node for final confirmation
+# Tools go to answer node for final formatting, then to END
 builder.add_edge("process_return", "answer")
 builder.add_edge("analyze_seller_reliability", "answer")
+builder.add_edge("answer", END)  # Answer node goes to END
 
 # Compile the agent with checkpointing
 checkpointer = InMemorySaver()
