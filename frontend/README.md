@@ -1,40 +1,55 @@
-# Return Policy Chat Frontend
+# BIX Analytics - Frontend
 
-A simplified React frontend for the Return Policy Chat Agent, built with Vite, TypeScript, and Tailwind CSS.
+Dashboard React para análise de dados e-commerce com chat assistente integrado.
 
-## Features
+## 🚀 Instalação
 
-- **Simple Chat Interface**: Clean, modern chat UI
-- **Real-time Messaging**: Connect to the FastAPI backend
-- **Conversation Memory**: Maintains chat history via thread_id
-- **TypeScript**: Type-safe React components
-- **Tailwind CSS**: Minimal styling with Tailwind
-
-## Setup
-
-1. Install dependencies:
 ```bash
 npm install
 ```
 
-2. Start the development server:
+## 💻 Desenvolvimento
+
 ```bash
 npm run dev
 ```
 
-The frontend will be available at `http://localhost:3000`
+Acesse: `http://localhost:3000`
 
-## Build
+## 📦 Build
 
 ```bash
 npm run build
 ```
 
-## Features Removed for Simplicity
+## 🎯 Funcionalidades
 
-- Removed shadcn/ui components (using basic Tailwind instead)
-- Removed React Router (single page app)
-- Removed React Query (using axios directly)
-- Removed complex UI components (accordion, tabs, etc.)
-- Simplified styling (basic Tailwind utility classes)
+- Dashboard com métricas e gráficos
+- Chat flutuante (minimizar/maximizar)
+- Dados mockados (funcionando sem backend)
 
+## 🔧 Tecnologias
+
+- React 18
+- TypeScript
+- Tailwind CSS
+- Recharts
+- Vite
+
+## 📝 Estrutura
+
+```
+src/
+├── components/     # Componentes reutilizáveis
+├── pages/          # Dashboard
+├── hooks/          # useOlistData
+└── utils/          # Mock data
+```
+
+## ⚙️ Configuração
+
+Para usar API real ao invés de mock data, altere em:
+- `src/hooks/useOlistData.ts`: `USE_MOCK_DATA = false`
+- `src/pages/Dashboard.tsx`: `USE_MOCK_DATA = false`
+
+Backend deve estar na porta 8000.
