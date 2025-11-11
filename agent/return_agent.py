@@ -180,9 +180,41 @@ def analyze_seller_reliability_node_custom(state: AgentState) -> AgentState:
     # Call tool directly
     result = analyze_seller_reliability(seller_id=seller_id, start_date=start_date, end_date=end_date, limit=limit)
     
-    # Return final answer
-    final_response = AIMessage(content=result)
-    return {"messages": [final_response]}
+    # Create a tool_call_id for the seller reliability call
+    tool_call_id = f"seller_reliability_call_{len(state['messages'])}"
+    
+    # Build args for tool call
+    tool_args = {}
+    if seller_id:
+        tool_args["seller_id"] = seller_id
+    if start_date:
+        tool_args["start_date"] = start_date
+    if end_date:
+        tool_args["end_date"] = end_date
+    if limit:
+        tool_args["limit"] = limit
+    
+    # Create AIMessage with tool_calls to satisfy OpenAI API requirement
+    # ToolMessage must be preceded by AIMessage with tool_calls
+    ai_message = AIMessage(
+        content="",
+        tool_calls=[{
+            "id": tool_call_id,
+            "name": "analyze_seller_reliability",
+            "args": tool_args,
+            "type": "tool_call"
+        }]
+    )
+    
+    # Return result as ToolMessage to maintain consistency with tool call pattern
+    tool_message = ToolMessage(
+        content=str(result),
+        tool_call_id=tool_call_id,
+        name="analyze_seller_reliability"
+    )
+    
+    # Return both messages: AIMessage first, then ToolMessage
+    return {"messages": [ai_message, tool_message]}
 
 
 def analyze_seller_reliability(seller_id: str = None, start_date: str = None, end_date: str = None, limit: int = None) -> str:
@@ -614,9 +646,12 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
         "- 'analyze_seller_reliability': a pergunta claramente pede análise de confiabilidade de vendedor(es) (ex: 'o seller X é confiável?', 'quais sellers são não confiáveis?').\n"
         "- 'general': nenhuma ferramenta necessária.\n\n"
         "Exemplos:\n"
-        "- 'Quais clientes pediram mais de 5 itens?' → sql_branch\n"
+        "- 'Há quantos pedidos com status devolução solicitada?' → sql_branch\n"
+        "- 'Quais 3 vendedores tiveram o maior número de entregas atrasadas em 2024?' → sql_branch\n"
         "- 'Qual é a política de devolução?' → pdf_branch\n"
+        "- 'O que acontece se o cliente pedir devolução 30 dias depois de receber o produto danificado?' → pdf_branch\n"
         "- 'O pedido e481f51... é elegível para devolução de acordo com a política?' → pdf_sql_branch\n"
+        "- 'Quantos pedidos da base de dados são elegíveis a devolução' → pdf_sql_branch\n"
         "- 'Devolver o pedido e481f51...' → process_return\n"
         "- 'Processar devolução do pedido 12345' → process_return\n"
         "- 'O seller 3442f8959a84dea7ee197c632cb2df15 é confiável?' → analyze_seller_reliability\n"
