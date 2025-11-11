@@ -482,38 +482,6 @@ def generate_query(state: AgentState):
     return {"messages": [response]}
 
 
-def _should_use_tools(messages: list) -> bool:
-    """Determine if tools are needed based on conversation context."""
-    if not messages:
-        return False
-    
-    # Check recent messages (last 3) for relevant keywords
-    # Keywords that suggest tools might be needed
-    return_keywords = [
-        "devolver", "devolução", "cancelar", "cancelamento", 
-        "retornar", "retorno", "process_order_return", "return_requested",
-        "confirmo", "confirmar", "quero devolver", "quero cancelar"
-    ]
-    
-    seller_keywords = [
-        "vendedor", "seller", "confiável", "confiabilidade", 
-        "desempenho", "análise", "analyze_seller", "reliability",
-        "vendedores", "sellers", "não confiável", "unreliable"
-    ]
-    
-    # Check last few messages for keywords
-    recent_messages_text = ""
-    for msg in reversed(messages[-3:]):  # Check last 3 messages
-        if hasattr(msg, 'content') and msg.content:
-            recent_messages_text += " " + str(msg.content).lower()
-    
-    # Check if any message contains relevant keywords
-    has_return_keywords = any(keyword in recent_messages_text for keyword in return_keywords)
-    has_seller_keywords = any(keyword in recent_messages_text for keyword in seller_keywords)
-    
-    return has_return_keywords or has_seller_keywords
-
-
 def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
     """Reducer that preserves all valid tool_call → tool response pairs."""
 
