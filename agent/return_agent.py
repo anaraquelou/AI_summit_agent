@@ -483,47 +483,60 @@ def generate_query(state: AgentState):
 
 
 def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
-    """Reducer that preserves all valid tool_call → tool response pairs."""
+    """
+    Safe reducer that keeps the last user + AI messages
+    AND preserves valid tool_call → tool_response ordering.
+    """
 
-    # --- STEP 1: Collect messages we might keep ---
-    user_msgs = []
-    ai_msgs = []
+    # Reverse iterate
+    reversed_msgs = list(reversed(messages))
 
-    for msg in reversed(messages):
+    kept = []
+    user_count = 0
+    ai_count = 0
 
-        if isinstance(msg, HumanMessage) and len(user_msgs) < keep_last_user:
-            user_msgs.append(msg)
-            continue
-        
-        if isinstance(msg, AIMessage) and len(ai_msgs) < keep_last_ai:
-            ai_msgs.append(msg)
-            continue
+    # Collect minimal relevant messages
+    for msg in reversed_msgs:
+        if isinstance(msg, HumanMessage) and user_count < keep_last_user:
+            kept.append(msg)
+            user_count += 1
+        elif isinstance(msg, AIMessage) and ai_count < keep_last_ai:
+            kept.append(msg)
+            ai_count += 1
 
-        # Ignore the rest for now (we’ll add matching tool msgs later)
-    
-    # --- STEP 2: Collect all required tool_call_ids ---
+    # Determine which tool_call_ids must be preserved
     required_tool_ids = set()
-    for ai in ai_msgs:
-        if ai.tool_calls:
-            for tc in ai.tool_calls:
-                tc_id = tc.get("id")
-                if tc_id:
-                    required_tool_ids.add(tc_id)
-    
-    # --- STEP 3: Collect all ToolMessages matching the IDs ---
-    tool_msgs = []
-    for msg in reversed(messages):
-        if isinstance(msg, ToolMessage) and msg.tool_call_id in required_tool_ids:
-            tool_msgs.append(msg)
+    for msg in kept:
+        if isinstance(msg, AIMessage) and msg.tool_calls:
+            for tc in msg.tool_calls:
+                required_tool_ids.add(tc["id"])
 
-    # MUST preserve chronological order
-    ai_msgs = list(reversed(ai_msgs))
-    tool_msgs = list(reversed(tool_msgs))
-    user_msgs = list(reversed(user_msgs))
+    # Collect matching ToolMessages
+    tool_msgs = [
+        msg for msg in messages
+        if isinstance(msg, ToolMessage) and msg.tool_call_id in required_tool_ids
+    ]
 
-    # Final order must be: AI → Tool → User
-    return ai_msgs + tool_msgs + user_msgs
+    # Build new message list in chronological order
+    new_messages = []
 
+    for msg in messages:
+        # Add AI
+        if msg in kept:
+            new_messages.append(msg)
+
+            # Immediately attach its tool responses
+            if isinstance(msg, AIMessage) and msg.tool_calls:
+                for tc in msg.tool_calls:
+                    for tm in tool_msgs:
+                        if tm.tool_call_id == tc["id"]:
+                            new_messages.append(tm)
+
+        # Add User only if in kept
+        elif isinstance(msg, HumanMessage) and msg in kept:
+            new_messages.append(msg)
+
+    return new_messages
 
 
 def answer_node(state: AgentState) -> AgentState:
