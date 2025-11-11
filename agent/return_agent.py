@@ -46,7 +46,6 @@ sql_tools = sql_toolkit.get_tools()
 
 # Extract SQL tools
 get_schema_tool = next(tool for tool in sql_tools if tool.name == "sql_db_schema")
-get_schema_node = ToolNode([get_schema_tool], name="get_schema")
 
 run_query_tool = next(tool for tool in sql_tools if tool.name == "sql_db_query")
 run_query_node = ToolNode([run_query_tool], name="run_query")
@@ -388,116 +387,52 @@ def list_tables(state: AgentState):
 
 
 def call_get_schema(state: AgentState):
-    """Create tool call for getting schema directly (no LLM needed)."""
-    print("call_get_schema tool")
-    # Create tool call directly - no LLM call needed
-    tool_call = {
-        "name": "sql_db_schema",
-        "args": {"table_names": ""},  # Empty string gets all tables
-        "id": f"schema_call_{len(state['messages'])}",
-        "type": "tool_call",
-    }
-    tool_call_message = AIMessage(content="", tool_calls=[tool_call])
-    return {"messages": [tool_call_message]}
+    """Get schema directly without creating a tool call."""
+    print("call_get_schema: getting schema directly")
+    # Call the schema tool directly instead of creating a tool call
+    table_names_str = "category_translation, customers, geolocation, order_items, order_payments, order_reviews, orders, products, sellers"
+    schema_result = get_schema_tool.invoke({"table_names": table_names_str})
+    
+    # Create a tool_call_id for the schema call
+    tool_call_id = f"schema_call_{len(state['messages'])}"
+    
+    # Create AIMessage with tool_calls to satisfy OpenAI API requirement
+    # ToolMessage must be preceded by AIMessage with tool_calls
+    ai_message = AIMessage(
+        content="",
+        tool_calls=[{
+            "id": tool_call_id,
+            "name": "sql_db_schema",
+            "args": {"table_names": table_names_str},
+            "type": "tool_call"
+        }]
+    )
+    
+    # Return schema as ToolMessage to maintain consistency with tool call pattern
+    tool_message = ToolMessage(
+        content=str(schema_result),
+        tool_call_id=tool_call_id,
+        name="sql_db_schema"
+    )
+    
+    # Return both messages: AIMessage first, then ToolMessage
+    return {"messages": [ai_message, tool_message]}
 
-TABLE_HINTS = """
-Tables:
-- orders: This is the core dataset. From each order you might find all other information.
-- order_items: This dataset includes data about the items purchased within each order.
-Example:
-The order_id = 00143d0f86d6fbd9f9b38ab440ac16f5 has 3 items (same product). Each item has the freight calculated accordingly to its measures and weight. To get the total freight value for each order you just have to sum.
-The total order_item value is: 21.33 * 3 = 63.99
-The total freight value is: 15.10 * 3 = 45.30
-The total order value (product + freight) is: 45.30 + 63.99 = 109.29
-- products: This dataset includes data about the products sold by BIX.
-- customers: This dataset has information about the customer and its location. Use it to identify unique customers in the orders dataset and to find the orders delivery location.
-At our system each order is assigned to a unique customer_id. This means that the same customer will get different ids for different orders. The purpose of having a customer_unique_id on the dataset is to allow you to identify customers that made repurchases at the store. Otherwise you would find that each order had a different customer associated with.
-- sellers: This dataset includes data about the sellers that fulfilled orders made at BIX. Use it to find the seller location and to identify which seller fulfilled each product.
-- geolocation: This dataset has information Brazilian zip codes and its lat/lng coordinates. Use it to plot maps and find distances between sellers and customers.
-- category_translation: Translates the product_category_name to english.
-- order_payments: This dataset includes data about the orders payment options.
-- order_reviews: This dataset includes data about the reviews made by the customers.
-After a customer purchases the product from BIX Store a seller gets notified to fulfill that order. Once the customer receives the product, or the estimated delivery date is due, the customer gets a satisfaction survey by email where he can give a note for the purchase experience and write down some comments.
-Orders table:
-- order_id: unique identifier of an order.
-- customer_id: key to the customer dataset. Each order has a unique customer_id.
-- order_status: reference to the order status (delivered, shipped, cancelled, return_requested, etc).
-- order_purchase_timestamp: shows the purchase timestamp.
-- order_approved_at: shows the payment approval timestamp.
-- order_delivered_carrier_date: shows the order posting timestamp. When it was handled to the logistic partner.
-- order_delivered_customer_date: shows the actual order delivery date to the customer.
-- order_estimated_delivery_date: shows the estimated delivery date that was informed to customer at the purchase moment.
-Order items table:
-- order_item_id: sequential number identifying number of items included in the same order.
-- order_id: order unique identifier
-- product_id: product unique identifier
-- seller_id: seller unique identifier
-- shipping_limit_date: shows the seller shipping limit date for handling the order over to the logistic partner.
-- price: item price
-- freight_value: item freight value item (if an order has more than one item the freight value is splitted between items)
-Customers table:
-- customer_id: key to the orders dataset. Each order has a unique customer_id.
-- customer_unique_id: unique identifier of a customer.
-- customer_zip_code_prefix: first five digits of customer zip code
-- customer_city: customer city name
-- customer_state: customer state
-Sellers table:
-- seller_id: seller unique identifier
-- seller_zip_code_prefix: first 5 digits of seller zip code
-- seller_city: seller city
-- seller_state: seller state
-Geolocation table:
-- geolocation_zip_code_prefix: first 5 digits of zip code
-- geolocation_lat: latitude coordinate
-- geolocation_lng: longitude coordinate
-- geolocation_city: city name
-- geolocation_state: state
-Category translation table:
-- product_category_name: category name in Portuguese
-- product_category_name_english: category name in English
-Order payments table:
-- order_id: unique identifier of an order.
-- payment_sequential: a customer may pay an order with more than one payment method. If he does so, a sequence will be created to accommodate all payments.
-- payment_type: method of payment chosen by the customer.
-- payment_installments: number of installments chosen by the customer.
-- payment_value: transaction value.
-Order reviews table:
-- review_id: unique review identifier
-- order_id: unique order identifier
-- review_score: Note ranging from 1 to 5 given by the customer on a satisfaction survey.
-- review_comment_title: Comment title from the review left by the customer, in Portuguese.
-- review_comment_message: Comment message from the review left by the customer, in Portuguese.
-- review_creation_date: Shows the date in which the satisfaction survey was sent to the customer.
-- review_answer_timestamp: Shows satisfaction survey answer timestamp.
-Products table:
-- product_id: unique product identifier
-- product_category_name: root category of product, in Portuguese.
-- product_name_length: number of characters extracted from the product name.
-- product_description_lengh: number of characters extracted from the product description.
-- product_photos_qty: number of product published photos.
-- product_weight_g: product weight measured in grams.
-- product_length_cm: product length measured in centimeters.
-- product_height_cm: product height measured in centimeters.
-- product_width_cm: product width measured in centimeters.
-"""
-
-generate_query_system_prompt = """
+generate_query_system_prompt = f"""
 You are an agent designed to interact with a SQL database.
-Given an input question, create a syntactically correct {dialect} query to run,
+Given an input question, create a syntactically correct {db.dialect} query to run,
 then look at the results of the query and return the answer. Unless the user
 specifies a specific number of examples they wish to obtain, always limit your
-query to at most {top_k} results.
+query to at most 5 results.
 
 You can order the results by a relevant column to return the most interesting
 examples in the database. Never query for all the columns from a specific table,
 only ask for the relevant columns given the question.
 
 DO NOT make any DML statements (INSERT, UPDATE, DELETE, DROP etc.) to the database.
-""".format(
-    dialect=db.dialect,
-    top_k=5,
-    DATABASE_DOCS=TABLE_HINTS
-)
+
+Use the database schema information provided in the conversation messages to understand the table structure.
+"""
 
 
 def generate_query(state: AgentState):
@@ -510,7 +445,7 @@ def generate_query(state: AgentState):
     # We do not force a tool call here, to allow the model to
     # respond naturally when it obtains the solution.
     llm_with_tools = llm.bind_tools([run_query_tool])
-    response = llm_with_tools.invoke([system_message] + reduce_messages(state["messages"]))
+    response = llm_with_tools.invoke([system_message] + state["messages"])
 
     return {"messages": [response]}
 
@@ -594,7 +529,7 @@ def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
     print("Generating final answer...")
-    messages = reduce_messages(state["messages"], keep_last_user=2, keep_last_ai=2)
+    messages = reduce_messages(state["messages"])
     pdf_context = state.get("pdf_context", "")
 
 
@@ -719,9 +654,7 @@ builder = StateGraph(AgentState)
 # Add all nodes
 builder.add_node("decide_path", decide_path)
 builder.add_node("pdf_branch", pdf_branch)
-builder.add_node("list_tables", list_tables)
 builder.add_node("call_get_schema", call_get_schema)
-builder.add_node("get_schema", get_schema_node)
 builder.add_node("generate_query", generate_query)
 builder.add_node("run_query", run_query_node)
 
@@ -737,7 +670,7 @@ builder.add_conditional_edges(
     "decide_path",
     lambda state: state["decide_path"],
     {
-        "sql_branch": "list_tables",
+        "sql_branch": "call_get_schema",
         "pdf_branch": "pdf_branch",
         "pdf_sql_branch": "pdf_branch",  # then we'll chain SQL after PDF
         "process_return": "process_return",
@@ -751,18 +684,16 @@ builder.add_conditional_edges(
 builder.add_conditional_edges(
     "pdf_branch",
     lambda state: (
-        "list_tables" if state["decide_path"] == "pdf_sql_branch" else "answer"
+        "call_get_schema" if state["decide_path"] == "pdf_sql_branch" else "answer"
     ),
     {
-        "list_tables": "list_tables",
+        "call_get_schema": "call_get_schema",
         "answer": "answer",
     },
 )
 
-# Keep your SQL workflow as before
-builder.add_edge("list_tables", "call_get_schema")
-builder.add_edge("call_get_schema", "get_schema")
-builder.add_edge("get_schema", "generate_query")
+# SQL workflow - get schema then generate query
+builder.add_edge("call_get_schema", "generate_query")
 builder.add_conditional_edges(
     "generate_query",
     should_continue,
