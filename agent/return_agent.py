@@ -1,8 +1,8 @@
 """
-Return Agent - A LangGraph agent for handling order returns and cancellations.
+Data Analyst Agent - A LangGraph agent for handling data analysis.
 
 This agent integrates PDF policy documents with SQL database queries to help
-users check order eligibility for returns and process return requests.
+users analyze data.
 """
 
 import sqlite3
@@ -39,24 +39,20 @@ class AgentState(TypedDict):
 llm = ChatOpenAI(model="gpt-5", temperature=0)
 llm_answer = ChatOpenAI(model="gpt-5", temperature=0, reasoning_effort="low")
 
-# Initialize database
+# Initialize database and SQL tools
 db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
 sql_toolkit = SQLDatabaseToolkit(db=db, llm=llm)
 sql_tools = sql_toolkit.get_tools()
 
 # Extract SQL tools
-get_schema_tool = next(tool for tool in sql_tools if tool.name == "sql_db_schema")
-
 run_query_tool = next(tool for tool in sql_tools if tool.name == "sql_db_query")
 run_query_node = ToolNode([run_query_tool], name="run_query")
 
 
 def process_order_return(order_id: str) -> str:
     """Atualiza o status do pedido no banco de dados para 'return_requested' (devolvido).
-    
     Args:
         order_id: ID do pedido a ser devolvido/cancelado
-        
     Returns:
         Mensagem de confirmação ou erro
     """
@@ -401,28 +397,12 @@ def pdf_branch(state: AgentState) -> AgentState:
     return state
 
 
-def list_tables(state: AgentState):
-    """List available database tables."""
-    print("list_tables tool")
-    tool_call = {
-        "name": "sql_db_list_tables",
-        "args": {},
-        "id": "abc123",
-        "type": "tool_call",
-    }
-    tool_call_message = AIMessage(content="", tool_calls=[tool_call])
-
-    list_tables_tool = next(tool for tool in sql_tools if tool.name == "sql_db_list_tables")
-    tool_message = list_tables_tool.invoke(tool_call)
-    response = AIMessage(f"Available tables: {tool_message.content}")
-    return {"messages": [tool_call_message, tool_message, response]}
-
-
 def call_get_schema(state: AgentState):
     """Get schema directly without creating a tool call."""
     print("call_get_schema: getting schema directly")
     # Call the schema tool directly instead of creating a tool call
     table_names_str = "category_translation, customers, geolocation, order_items, order_payments, order_reviews, orders, products, sellers"
+    get_schema_tool = next(tool for tool in sql_tools if tool.name == "sql_db_schema")
     schema_result = get_schema_tool.invoke({"table_names": table_names_str})
     
     # Create a tool_call_id for the schema call
