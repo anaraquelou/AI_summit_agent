@@ -462,7 +462,7 @@ def generate_query(state: AgentState):
     return {"messages": [response]}
 
 
-def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
+def reduce_messages(messages, keep_last_user=2, keep_last_ai=2):
     """
     Safe reducer that keeps the last user + AI messages
     AND preserves valid tool_call → tool_response ordering.
