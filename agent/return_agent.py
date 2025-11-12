@@ -361,7 +361,7 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
                 f"\nMostrando top {limit} vendedores não confiáveis."
             )
         else:
-        result_lines.append(
+            result_lines.append(
             f"\nTotal de vendedores não confiáveis: {len(results)}"
         )
         
@@ -462,7 +462,7 @@ def generate_query(state: AgentState):
     return {"messages": [response]}
 
 
-def reduce_messages(messages, keep_last_user=2, keep_last_ai=2):
+def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
     """
     Safe reducer that keeps the last user + AI messages
     AND preserves valid tool_call → tool_response ordering.
