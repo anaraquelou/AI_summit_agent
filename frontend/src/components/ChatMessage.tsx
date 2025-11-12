@@ -8,18 +8,18 @@ export const ChatMessage = ({ role, content }: ChatMessageProps) => {
 
   return (
     <div
-      className={`flex w-full mb-4 ${
+      className={`flex w-full mb-3 ${
         isUser ? 'justify-end' : 'justify-start'
       }`}
     >
       <div
-        className={`max-w-[80%] rounded-2xl px-4 py-3 shadow-sm ${
+        className={`max-w-[85%] rounded-xl px-3 py-2 shadow-sm text-sm ${
           isUser
             ? 'bg-[hsl(var(--chat-user-bg))] text-[hsl(var(--chat-user-text))]'
             : 'bg-[hsl(var(--chat-assistant-bg))] text-[hsl(var(--chat-assistant-text))] border border-gray-200'
         }`}
       >
-        <p className="whitespace-pre-wrap break-words">{content}</p>
+        <p className="whitespace-pre-wrap break-words leading-relaxed">{content}</p>
       </div>
     </div>
   );

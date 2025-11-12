@@ -118,15 +118,15 @@ export const Dashboard = () => {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="p-8">
+      <div className="p-4 sm:p-6">
         {/* Header */}
-        <div className="mb-8">
-          <h1 className="text-3xl font-bold text-gray-900 mb-2">BIX E-commerce</h1>
-          <p className="text-gray-600">Visão geral do desempenho da plataforma</p>
+        <div className="mb-4 sm:mb-6">
+          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 mb-1">BIX E-commerce</h1>
+          <p className="text-sm sm:text-base text-gray-600">Visão geral do desempenho da plataforma</p>
         </div>
 
         {/* Main Metrics Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-4 mb-4 sm:mb-6">
           <MetricCard
             title="Total de Pedidos"
             value={formatNumber(metrics?.totalOrders || 0)}
@@ -173,43 +173,43 @@ export const Dashboard = () => {
 
         {/* Delivery Metrics Cards */}
         {deliveryMetrics && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-600">Tempo Médio de Entrega</p>
-                <Calendar className="w-5 h-5 text-blue-600" />
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 sm:gap-4 mb-4 sm:mb-6">
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Tempo Médio de Entrega</p>
+                <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-blue-600" />
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">
                 {deliveryMetrics.avg_delivery_time_days.toFixed(1)} dias
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-600">Taxa de Entrega no Prazo</p>
-                <TrendingUp className="w-5 h-5 text-green-600" />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Taxa de Entrega no Prazo</p>
+                <TrendingUp className="w-4 h-4 sm:w-5 sm:h-5 text-green-600" />
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">
                 {(deliveryMetrics.on_time_delivery_rate * 100).toFixed(1)}%
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-600">Pedidos Atrasados</p>
-                <Package className="w-5 h-5 text-red-600" />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Pedidos Atrasados</p>
+                <Package className="w-4 h-4 sm:w-5 sm:h-5 text-red-600" />
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">
                 {formatNumber(deliveryMetrics.delayed_orders)}
               </p>
             </div>
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-              <div className="flex items-center justify-between mb-2">
-                <p className="text-sm font-medium text-gray-600">Total Entregue</p>
-                <MapPin className="w-5 h-5 text-purple-600" />
+            <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+              <div className="flex items-center justify-between mb-1 sm:mb-2">
+                <p className="text-xs sm:text-sm font-medium text-gray-600">Total Entregue</p>
+                <MapPin className="w-4 h-4 sm:w-5 sm:h-5 text-purple-600" />
               </div>
-              <p className="text-3xl font-bold text-gray-900">
+              <p className="text-xl sm:text-2xl font-bold text-gray-900">
                 {formatNumber(deliveryMetrics.total_delivered)}
               </p>
             </div>
@@ -217,11 +217,11 @@ export const Dashboard = () => {
         )}
 
         {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 sm:gap-4 mb-4 sm:mb-6">
           {/* Orders by Month */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Pedidos por Mês</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">Pedidos por Mês</h3>
+            <ResponsiveContainer width="100%" height={220}>
               <LineChart data={ordersByMonth}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -240,9 +240,9 @@ export const Dashboard = () => {
           </div>
 
           {/* Revenue by Month */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Receita por Mês</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">Receita por Mês</h3>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={ordersByMonth}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="month" />
@@ -259,9 +259,9 @@ export const Dashboard = () => {
           </div>
 
           {/* Top Categories */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 8 Categorias</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">Top 8 Categorias</h3>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={topCategories.slice(0, 8)} layout="vertical">
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis type="number" />
@@ -282,9 +282,9 @@ export const Dashboard = () => {
           </div>
 
           {/* Payment Methods Analysis */}
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-            <h3 className="text-lg font-semibold text-gray-900 mb-4">Análise por Forma de Pagamento</h3>
-            <ResponsiveContainer width="100%" height={300}>
+          <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+            <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">Análise por Forma de Pagamento</h3>
+            <ResponsiveContainer width="100%" height={220}>
               <BarChart data={paymentAnalytics}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="payment_type" />
@@ -315,9 +315,9 @@ export const Dashboard = () => {
         </div>
 
         {/* Top States by Revenue */}
-        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
-          <h3 className="text-lg font-semibold text-gray-900 mb-4">Top 10 Estados por Receita</h3>
-          <ResponsiveContainer width="100%" height={400}>
+        <div className="bg-white rounded-lg shadow-sm border border-gray-200 p-3 sm:p-4">
+          <h3 className="text-base sm:text-lg font-semibold text-gray-900 mb-2 sm:mb-3">Top 10 Estados por Receita</h3>
+          <ResponsiveContainer width="100%" height={300}>
             <BarChart data={revenueByState.slice(0, 10)}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="state" />

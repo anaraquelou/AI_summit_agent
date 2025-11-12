@@ -10,26 +10,16 @@ export const mockMetrics = {
 };
 
 export const mockOrdersByMonth = [
-  { month: '2017-01', orders: 802, revenue: 123852.42 },
-  { month: '2017-02', orders: 1754, revenue: 281284.89 },
-  { month: '2017-03', orders: 2371, revenue: 389471.21 },
-  { month: '2017-04', orders: 2638, revenue: 419341.87 },
-  { month: '2017-05', orders: 3692, revenue: 589012.34 },
-  { month: '2017-06', orders: 3727, revenue: 593847.23 },
-  { month: '2017-07', orders: 4023, revenue: 642789.45 },
-  { month: '2017-08', orders: 4339, revenue: 696234.21 },
-  { month: '2017-09', orders: 4564, revenue: 729456.78 },
-  { month: '2017-10', orders: 4809, revenue: 767893.34 },
-  { month: '2017-11', orders: 7543, revenue: 1203478.56 },
-  { month: '2017-12', orders: 5989, revenue: 955234.89 },
-  { month: '2018-01', orders: 7271, revenue: 1159823.45 },
-  { month: '2018-02', orders: 6739, revenue: 1074567.23 },
-  { month: '2018-03', orders: 7551, revenue: 1204982.34 },
-  { month: '2018-04', orders: 6923, revenue: 1105234.56 },
-  { month: '2018-05', orders: 7287, revenue: 1163478.90 },
-  { month: '2018-06', orders: 6449, revenue: 1029234.67 },
-  { month: '2018-07', orders: 6729, revenue: 1073234.89 },
-  { month: '2018-08', orders: 6554, revenue: 1045678.34 },
+  { month: '2025-01', orders: 802, revenue: 123852.42 },
+  { month: '2025-02', orders: 1754, revenue: 281284.89 },
+  { month: '2025-03', orders: 2371, revenue: 389471.21 },
+  { month: '2025-04', orders: 2638, revenue: 419341.87 },
+  { month: '2025-05', orders: 3692, revenue: 589012.34 },
+  { month: '2025-06', orders: 3727, revenue: 593847.23 },
+  { month: '2025-07', orders: 4023, revenue: 642789.45 },
+  { month: '2025-08', orders: 4339, revenue: 696234.21 },
+  { month: '2025-09', orders: 4564, revenue: 729456.78 },
+  { month: '2025-10', orders: 4809, revenue: 767893.34 },
 ];
 
 export const mockTopCategories = [

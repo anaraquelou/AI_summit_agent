@@ -361,9 +361,9 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
                 f"\nMostrando top {limit} vendedores não confiáveis."
             )
         else:
-            result_lines.append(
-                f"\nTotal de vendedores não confiáveis: {len(results)}"
-            )
+        result_lines.append(
+            f"\nTotal de vendedores não confiáveis: {len(results)}"
+        )
         
         return "\n".join(result_lines)
         
