@@ -39,44 +39,11 @@ class ChatMessage(BaseModel):
 
 class ChatRequest(BaseModel):
     message: str
-    conversation_history: List[ChatMessage] = []
     thread_id: Optional[str] = "default"  # Thread ID for conversation memory
 
 class ChatResponse(BaseModel):
     message: str
     status: str = "success"
-
-
-def convert_messages_to_langchain(messages: List[ChatMessage]) -> List[BaseMessage]:
-    """Convert API ChatMessage format to LangChain BaseMessage format."""
-    langchain_messages = []
-    for msg in messages:
-        if msg.role == "user":
-            langchain_messages.append(HumanMessage(content=msg.content))
-        elif msg.role == "assistant":
-            langchain_messages.append(AIMessage(content=msg.content))
-    return langchain_messages
-
-
-def convert_langchain_to_messages(langchain_messages: List[BaseMessage]) -> List[ChatMessage]:
-    """Convert LangChain BaseMessage format to API ChatMessage format."""
-    messages = []
-    for msg in langchain_messages:
-        if isinstance(msg, HumanMessage):
-            messages.append(ChatMessage(
-                role="user",
-                content=msg.content,
-                timestamp=None
-            ))
-        elif isinstance(msg, AIMessage):
-            # Extract text content (handle tool calls if present)
-            content = msg.content if isinstance(msg.content, str) else str(msg.content)
-            messages.append(ChatMessage(
-                role="assistant",
-                content=content,
-                timestamp=None
-            ))
-    return messages
 
 
 @app.get("/")
@@ -91,12 +58,9 @@ async def root():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
-        # Prepare the input state for the agent
-        # Convert conversation history to LangChain messages
-        langchain_messages = convert_messages_to_langchain(request.conversation_history)
         
         # Add the new user message
-        langchain_messages.append(HumanMessage(content=request.message))
+        langchain_messages = [(HumanMessage(content=request.message))]
         
         # Create input state
         input_state: Dict[str, Any] = {
