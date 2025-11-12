@@ -15,7 +15,7 @@ if not os.getenv("OPENAI_API_KEY"):
     print("Please set it in your .env file or environment")
     sys.exit(1)
 
-app = FastAPI(title="Return Policy Chat Agent", version="2.0.0")
+app = FastAPI(title="Data Analyst Chat Agent", version="2.0.0")
 
 # CORS middleware for React frontend
 app.add_middleware(
@@ -44,7 +44,6 @@ class ChatRequest(BaseModel):
 
 class ChatResponse(BaseModel):
     message: str
-    conversation_history: List[ChatMessage]
     status: str = "success"
 
 
@@ -83,9 +82,9 @@ def convert_langchain_to_messages(langchain_messages: List[BaseMessage]) -> List
 @app.get("/")
 async def root():
     return {
-        "message": "Return Policy Chat Agent API",
+        "message": "Data analyst Chat Agent API",
         "version": "2.0.0",
-        "description": "LangGraph-based agent with intelligent routing for returns and order management"
+        "description": "LangGraph-based agent with intelligent routing for data analysis"
     }
 
 
@@ -147,12 +146,9 @@ async def chat(request: ChatRequest):
         if not isinstance(assistant_content, str):
             assistant_content = str(assistant_content)
         
-        # Convert all messages back to API format
-        conversation_history = convert_langchain_to_messages(response_messages)
         
         return ChatResponse(
             message=assistant_content,
-            conversation_history=conversation_history,
             status="success"
         )
     except Exception as e:
