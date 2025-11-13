@@ -50,7 +50,7 @@ run_query_node = ToolNode([run_query_tool], name="run_query")
 
 
 def process_order_return(order_id: str) -> str:
-    """Atualiza o status do pedido no banco de dados para 'return_requested' (devolvido).
+    """Atualiza o status do pedido no banco de dados para 'return_processed' (devolvido).
     Args:
         order_id: ID do pedido a ser devolvido/cancelado
     Returns:
@@ -67,11 +67,11 @@ def process_order_return(order_id: str) -> str:
             return f"Erro: Pedido {order_id} não encontrado no banco de dados."
         
         # Atualiza o status
-        cursor.execute("UPDATE orders SET order_status = 'return_requested' WHERE order_id = ?", (order_id,))
+        cursor.execute("UPDATE orders SET order_status = 'return_processed' WHERE order_id = ?", (order_id,))
         conn.commit()
         conn.close()
         
-        return f"Pedido {order_id} foi marcado como devolvido (return_requested) com sucesso."
+        return f"Pedido {order_id} foi marcado como devolvido (return_processed) com sucesso."
     except Exception as e:
         return f"Erro ao processar devolução: {str(e)}"
 
@@ -80,7 +80,7 @@ def process_order_return(order_id: str) -> str:
 return_order_tool = StructuredTool.from_function(
     func=process_order_return,
     name="process_order_return",
-    description="Atualiza o status de um pedido para 'return_requested' (devolvido) no banco de dados. Use esta ferramenta quando o usuário confirmar que deseja devolver ou cancelar um pedido específico."
+    description="Atualiza o status de um pedido para 'return_processed' (devolvido) no banco de dados. Use esta ferramenta quando o usuário confirmar que deseja devolver ou cancelar um pedido específico."
 )
 
 return_order_node = ToolNode([return_order_tool], name="process_return")
@@ -534,26 +534,18 @@ Seu tom é direto, profissional e objetivo, como um colega analista experiente.
 <Tarefa>
 - Consultar informações de pedidos no banco de dados.
 - Ler a política de devolução em PDF.
-- Determinar se um pedido é elegível para devolução considerando regras internas.
+- Responder perguntas sobre os dados do banco de dados e da política de devolução.
 </Tarefa>
 
 <Instruções>
 - Seja sucinto e objetivo. Responda como um analista falando com outro analista.
 - Apresente apenas a lógica essencial utilizada na conclusão, sem narrar ações internas 
   (ex: "consultando", "processando", "buscando").
-- Se não houver dados suficientes, diga exatamente o que falta e siga com o próximo passo útil.
-- Quando a pergunta envolver devolução de um pedido, solicite o número do pedido e cruze os 
-  dados com a política do PDF.
-- Apenas processe a devolução após confirmação explícita do usuário.
+- Processe a devolução direto sem perguntar por mais informações.
 - Evite devolver perguntas desnecessárias; tente sempre avançar com a análise.
 - Nunca invente informações além do que está no banco ou no PDF.
 - Quando receber resultados de análise de vendedores (especialmente listas com separadores como === ou ---), 
   reformate completamente para uma resposta natural e legível:
-  * Remova TODOS os separadores (===, ---, linhas vazias excessivas)
-  * Use formatação de lista numerada ou com bullets
-  * Apresente cada vendedor em uma linha concisa com as informações principais
-  * Não repita cabeçalhos ou informações redundantes
-  * Transforme dados técnicos em linguagem natural
 </Instruções>
 
 <Exemplos>
@@ -610,7 +602,7 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
         "- 'Há quantos pedidos com status devolução solicitada?' → sql_branch\n"
         "- 'Quais 3 vendedores tiveram o maior número de entregas atrasadas em 2024?' → sql_branch\n"
         "- 'Qual é a política de devolução?' → pdf_branch\n"
-        "- 'O que acontece se o cliente pedir devolução 30 dias depois de receber o produto danificado?' → pdf_branch\n"
+        "- 'O que acontece se o cliente pedir devolução 31 dias depois de receber o produto danificado?' → pdf_branch\n"
         "- 'O pedido e481f51... é elegível para devolução de acordo com a política?' → pdf_sql_branch\n"
         "- 'Quantos pedidos da base de dados são elegíveis a devolução' → pdf_sql_branch\n"
         "- 'Devolver o pedido e481f51...' → process_return\n"
