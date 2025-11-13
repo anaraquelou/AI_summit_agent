@@ -318,7 +318,14 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
                 conn.close()
                 
                 if seller_exists:
-                    return f"Não, o seller {seller_id} é considerado confiável (taxa de atrasos <= 5% e nota média >= 3.5)."
+                    return (
+                        f"Sim, o seller {seller_id} é considerado confiável.\n"
+                        f"Motivos:\n"
+                        f"- Taxa de pedidos atrasados: {late_pct}% (abaixo de 5%)\n"
+                        f"- Nota média de reviews: {avg_score}/5.0 (acima de 3.5)\n"
+                        f"- Total de pedidos analisados: {total_orders}\n"
+                        f"- Pedidos atrasados: {late_orders}"
+                    )
                 else:
                     return f"Erro: Seller {seller_id} não encontrado no banco de dados."
         
