@@ -296,13 +296,61 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
         cursor.execute(query, query_params)
         results = cursor.fetchall()
         
-        # If seller_id was provided, return yes/no answer
+        # If seller_id was provided, return yes/no answer with metrics
         if seller_id:
-            if results:
-                # Seller is unreliable
-                row = results[0]
-                seller_id_result, city, state, total_orders, late_orders, late_pct, avg_score = row
+            # First, check if seller exists
+            cursor.execute("SELECT seller_id FROM sellers WHERE seller_id = ?", (seller_id,))
+            seller_exists = cursor.fetchone()
+            
+            if not seller_exists:
                 conn.close()
+                return f"Erro: Seller {seller_id} não encontrado no banco de dados."
+            
+            # Calculate seller metrics regardless of reliability status
+            metrics_query = f"""
+            WITH seller_metrics AS (
+                SELECT 
+                    oi.seller_id,
+                    COUNT(DISTINCT o.order_id) as total_orders,
+                    SUM(CASE 
+                        WHEN o.order_delivered_customer_date IS NOT NULL 
+                        AND o.order_estimated_delivery_date IS NOT NULL
+                        AND date(o.order_delivered_customer_date) > date(o.order_estimated_delivery_date)
+                        THEN 1 
+                        ELSE 0 
+                    END) as late_orders,
+                    AVG(or_review.review_score) as avg_review_score
+                FROM order_items oi
+                INNER JOIN orders o ON oi.order_id = o.order_id
+                LEFT JOIN order_reviews or_review ON o.order_id = or_review.order_id
+                WHERE {where_clause}
+                GROUP BY oi.seller_id
+            )
+            SELECT 
+                sm.seller_id,
+                s.seller_city,
+                s.seller_state,
+                sm.total_orders,
+                sm.late_orders,
+                ROUND(CAST(sm.late_orders AS FLOAT) / sm.total_orders * 100, 2) as late_percentage,
+                ROUND(COALESCE(sm.avg_review_score, 0), 2) as avg_review_score
+            FROM seller_metrics sm
+            INNER JOIN sellers s ON sm.seller_id = s.seller_id
+            """
+            
+            cursor.execute(metrics_query, query_params)
+            metrics_result = cursor.fetchone()
+            conn.close()
+            
+            if not metrics_result:
+                return f"Erro: Não foi possível calcular métricas para o seller {seller_id}."
+            
+            seller_id_result, city, state, total_orders, late_orders, late_pct, avg_score = metrics_result
+            
+            # Determine if seller is reliable
+            is_unreliable = late_pct > 5.0 and avg_score < 3.5
+            
+            if is_unreliable:
                 return (
                     f"Sim, o seller {seller_id} é considerado não confiável.\n"
                     f"Motivos:\n"
@@ -312,15 +360,14 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
                     f"- Pedidos atrasados: {late_orders}"
                 )
             else:
-                # Check if seller exists at all (connection still open from query above)
-                cursor.execute("SELECT seller_id FROM sellers WHERE seller_id = ?", (seller_id,))
-                seller_exists = cursor.fetchone()
-                conn.close()
-                
-                if seller_exists:
-                    return f"Não, o seller {seller_id} é considerado confiável (taxa de atrasos <= 5% e nota média >= 3.5)."
-                else:
-                    return f"Erro: Seller {seller_id} não encontrado no banco de dados."
+                return (
+                    f"Não, o seller {seller_id} é considerado confiável.\n"
+                    f"Motivos:\n"
+                    f"- Taxa de pedidos atrasados: {late_pct}% (abaixo ou igual a 5%)\n"
+                    f"- Nota média de reviews: {avg_score}/5.0 (acima ou igual a 3.5)\n"
+                    f"- Total de pedidos analisados: {total_orders}\n"
+                    f"- Pedidos atrasados: {late_orders}"
+                )
         
         conn.close()
         
