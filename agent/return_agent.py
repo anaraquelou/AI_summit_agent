@@ -4,11 +4,12 @@ Data Analyst Agent - A LangGraph agent for handling data analysis.
 This agent integrates PDF policy documents with SQL database queries to help
 users analyze data.
 """
-
 import sqlite3
 import re
 from typing import Annotated, Sequence, TypedDict, Literal
+from dataclasses import dataclass
 from pathlib import Path
+from dotenv import load_dotenv
 
 from langchain_openai import ChatOpenAI
 from langchain_core.messages import BaseMessage, SystemMessage, AIMessage, ToolMessage, HumanMessage
@@ -16,16 +17,24 @@ from langchain_core.runnables import RunnableConfig
 from langchain_core.tools import StructuredTool
 from langchain_community.utilities.sql_database import SQLDatabase
 from langchain_community.agent_toolkits.sql.toolkit import SQLDatabaseToolkit
-from langchain_community.document_loaders import PyPDFLoader
 from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode
+from langgraph.runtime import get_runtime
 
-# Get project root directory (parent of agent/)
+# Load environment variables
+load_dotenv()
+
 PROJECT_ROOT = Path(__file__).parent.parent
 DB_PATH = PROJECT_ROOT / "datasets" / "olist_ecommerce.db"
-PDF_PATH = PROJECT_ROOT / "docs" / "BIX-return-policy.pdf"
+
+
+@dataclass
+class AgentContext:
+    user_id: str
+    db_connection: sqlite3.Connection
+    pdf_policy: str
 
 
 class AgentState(TypedDict):
@@ -39,7 +48,7 @@ class AgentState(TypedDict):
 llm = ChatOpenAI(model="gpt-5", temperature=0)
 llm_answer = ChatOpenAI(model="gpt-5", temperature=0, reasoning_effort="low")
 
-# Initialize database and SQL tools
+# Initialize database and SQL tools (this is fine - SQLAlchemy handles pooling)
 db = SQLDatabase.from_uri(f"sqlite:///{DB_PATH}")
 sql_toolkit = SQLDatabaseToolkit(db=db, llm=llm)
 sql_tools = sql_toolkit.get_tools()
@@ -57,19 +66,18 @@ def process_order_return(order_id: str) -> str:
         Mensagem de confirmação ou erro
     """
     try:
-        conn = sqlite3.connect(str(DB_PATH))
-        cursor = conn.cursor()
-        
+        # Access DB without reopening connection
+        runtime = get_runtime(AgentContext)
+        cursor = runtime.context.db_connection.cursor()
+            
         # Verifica se o pedido existe
         cursor.execute("SELECT order_id FROM orders WHERE order_id = ?", (order_id,))
+        runtime.context.db_connection.commit()
         if not cursor.fetchone():
-            conn.close()
             return f"Erro: Pedido {order_id} não encontrado no banco de dados."
         
         # Atualiza o status
         cursor.execute("UPDATE orders SET order_status = 'return_processed' WHERE order_id = ?", (order_id,))
-        conn.commit()
-        conn.close()
         
         return f"Pedido {order_id} foi marcado como devolvido (return_processed) com sucesso."
     except Exception as e:
@@ -233,8 +241,9 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
         Otherwise, returns list of unreliable sellers (limited if limit is provided).
     """
     try:
-        conn = sqlite3.connect(str(DB_PATH))
-        cursor = conn.cursor()
+        # Access DB without reopening connection
+        runtime = get_runtime(AgentContext)
+        cursor = runtime.context.db_connection.cursor()
         
         # Build WHERE clause based on provided parameters
         where_conditions = ["o.order_status = 'delivered'"]
@@ -303,7 +312,6 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
             seller_exists = cursor.fetchone()
             
             if not seller_exists:
-                conn.close()
                 return f"Erro: Seller {seller_id} não encontrado no banco de dados."
             
             # Calculate seller metrics regardless of reliability status
@@ -340,7 +348,6 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
             
             cursor.execute(metrics_query, query_params)
             metrics_result = cursor.fetchone()
-            conn.close()
             
             if not metrics_result:
                 return f"Erro: Não foi possível calcular métricas para o seller {seller_id}."
@@ -369,7 +376,6 @@ def analyze_seller_reliability(seller_id: str = None, start_date: str = None, en
                     f"- Pedidos atrasados: {late_orders}"
                 )
         
-        conn.close()
         
         # Format date range text
         date_range_text = ""
@@ -431,12 +437,8 @@ seller_reliability_node = ToolNode([seller_reliability_tool], name="analyze_sell
 def pdf_branch(state: AgentState) -> AgentState:
     """Load and serialize PDF content into state."""
     print("Running PDF branch...")
-    loader = PyPDFLoader(str(PDF_PATH))
-    docs = loader.load()
-    serialized = "\n\n".join(
-        (f"Source: {doc.metadata}\nContent: {doc.page_content}")
-        for doc in docs
-    )
+    runtime = get_runtime(AgentContext)
+    serialized = runtime.context.pdf_policy
 
     # store the serialized PDF content in the state
     state["pdf_context"] = serialized
@@ -684,7 +686,7 @@ def should_continue(state: AgentState) -> Literal[END, "run_query", "answer"]:
 
 
 # Build the graph
-builder = StateGraph(AgentState)
+builder = StateGraph(state_schema=AgentState, context_schema=AgentContext)
 
 # Add all nodes
 builder.add_node("decide_path", decide_path)
