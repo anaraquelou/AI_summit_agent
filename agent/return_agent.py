@@ -569,7 +569,7 @@ def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
     print("Generating final answer...")
-    messages = reduce_messages(state["messages"])
+    messages = state["messages"]
     pdf_context = state.get("pdf_context", "")
 
 

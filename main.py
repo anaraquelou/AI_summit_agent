@@ -60,7 +60,7 @@ async def chat(request: ChatRequest):
     try:
         
         # Add the new user message
-        langchain_messages = [(HumanMessage(content=request.message))]
+        langchain_messages = [HumanMessage(content=request.message)]
         
         # Create input state
         input_state: Dict[str, Any] = {
