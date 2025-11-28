@@ -579,7 +579,7 @@ Agente: Os top 3 vendedores menos confiáveis são:
     return {"messages": [response]}
 
 
-def decide_path(state: AgentState, config: RunnableConfig) -> dict:
+def decide_path(state: AgentState, config: RunnableConfig, llm_override=None) -> dict:
     """Decide which branch to take based on user query."""
     logger.info("Routing request")
     messages = state["messages"]
@@ -608,7 +608,8 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
         "- 'Quem é você?' → general"
     )
 
-    response = llm.invoke([SystemMessage(system_prompt)] + [last_message], config)
+    model = llm_override or llm
+    response = model.invoke([SystemMessage(system_prompt)] + [last_message], config)
     
     decision = response.content.strip().lower()
     logger.debug(f"Routing decision: {decision}")
