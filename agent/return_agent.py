@@ -21,6 +21,8 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode
+from langchain_core.messages.utils import trim_messages, count_tokens_approximately
+
 
 # Get project root directory (parent of agent/)
 PROJECT_ROOT = Path(__file__).parent.parent
@@ -47,6 +49,21 @@ sql_tools = sql_toolkit.get_tools()
 # Extract SQL tools
 run_query_tool = next(tool for tool in sql_tools if tool.name == "sql_db_query")
 run_query_node = ToolNode([run_query_tool], name="run_query")
+
+
+def trim_history(messages, max_tokens: int = 5000):
+    """
+    Trim a list of chat messages to keep only the last messages up to ~max_tokens tokens.
+    Uses `trim_messages` utility from LangChain.
+    """
+    return trim_messages(
+        messages,
+        strategy="last",
+        token_counter=count_tokens_approximately,
+        max_tokens=max_tokens,
+        start_on="human",
+        end_on=("human", "tool"),
+    )
 
 
 def process_order_return(order_id: str) -> str:
@@ -569,7 +586,7 @@ def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
     print("Generating final answer...")
-    messages = state["messages"]
+    messages = trim_history(state["messages"])
     pdf_context = state.get("pdf_context", "")
 
 
