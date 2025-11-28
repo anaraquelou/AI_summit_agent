@@ -22,12 +22,16 @@ from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode
 from agent.agent_utils import trim_history, reduce_messages
+from logger import setup_logger
 
 
 # Get project root directory (parent of agent/)
 PROJECT_ROOT = Path(__file__).parent.parent
 DB_PATH = PROJECT_ROOT / "datasets" / "olist_ecommerce.db"
 PDF_PATH = PROJECT_ROOT / "docs" / "BIX-return-policy.pdf"
+
+# Setup logger using logger.py
+logger = setup_logger(__name__)
 
 
 class AgentState(TypedDict):
@@ -90,7 +94,6 @@ return_order_node = ToolNode([return_order_tool], name="process_return")
 
 def process_return_node(state: AgentState) -> AgentState:
     """Process return order - extract order_id and call tool directly."""
-    print("process_return_node: calling tool directly")
     messages = state["messages"]
     last_message = messages[-1] if messages else None
     
@@ -122,6 +125,8 @@ def process_return_node(state: AgentState) -> AgentState:
             # Fallback: use first significant word or return error
             order_id = words[0] if words else ""
     
+    logger.info(f"Processing return order: {order_id[:20]}..." if len(order_id) > 20 else f"Processing return order: {order_id}")
+    
     # Call tool directly
     result = process_order_return(order_id)
     
@@ -132,7 +137,6 @@ def process_return_node(state: AgentState) -> AgentState:
 
 def analyze_seller_reliability_node_custom(state: AgentState) -> AgentState:
     """Analyze seller reliability - extract parameters and call tool directly."""
-    print("analyze_seller_reliability_node_custom: calling tool directly")
     messages = state["messages"]
     last_message = messages[-1] if messages else None
     
@@ -174,7 +178,7 @@ def analyze_seller_reliability_node_custom(state: AgentState) -> AgentState:
         # If only one date found, check context to determine if it's start or end
         # For simplicity, treat as start_date
         start_date = dates[0]
-    
+   
     # Call tool directly
     result = analyze_seller_reliability(seller_id=seller_id, start_date=start_date, end_date=end_date, limit=limit)
     
@@ -432,7 +436,7 @@ seller_reliability_node = ToolNode([seller_reliability_tool], name="analyze_sell
 
 def pdf_branch(state: AgentState) -> AgentState:
     """Load and serialize PDF content into state."""
-    print("Running PDF branch...")
+    logger.info("Loading PDF content")
     loader = PyPDFLoader(str(PDF_PATH))
     docs = loader.load()
     serialized = "\n\n".join(
@@ -442,13 +446,13 @@ def pdf_branch(state: AgentState) -> AgentState:
 
     # store the serialized PDF content in the state
     state["pdf_context"] = serialized
-    print(f"pdf_context loaded: {len(serialized)} characters")
+    logger.info(f"PDF loaded: {len(docs)} pages, {len(serialized)} chars")
     return state
 
 
 def call_get_schema(state: AgentState):
     """Get schema directly without creating a tool call."""
-    print("call_get_schema: getting schema directly")
+    logger.info("Fetching database schema")
     # Call the schema tool directly instead of creating a tool call
     table_names_str = "category_translation, customers, geolocation, order_items, order_payments, order_reviews, orders, products, sellers"
     get_schema_tool = next(tool for tool in sql_tools if tool.name == "sql_db_schema")
@@ -498,7 +502,7 @@ Use the database schema information provided in the conversation messages to und
 
 def generate_query(state: AgentState):
     """Generate SQL query based on user question."""
-    print("generate_query tool")
+    logger.info("Generating SQL query")
     system_message = {
         "role": "system",
         "content": generate_query_system_prompt,
@@ -513,7 +517,7 @@ def generate_query(state: AgentState):
 
 def answer_node(state: AgentState) -> AgentState:
     """Generate final answer using PDF and/or SQL context."""
-    print("Generating final answer...")
+    logger.info("Generating final answer")
     messages = trim_history(state["messages"])
     pdf_context = state.get("pdf_context", "")
 
@@ -577,7 +581,7 @@ Agente: Os top 3 vendedores menos confiáveis são:
 
 def decide_path(state: AgentState, config: RunnableConfig) -> dict:
     """Decide which branch to take based on user query."""
-    print("decide_path tool")
+    logger.info("Routing request")
     messages = state["messages"]
     last_message = messages[-1]
 
@@ -607,7 +611,7 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
     response = llm.invoke([SystemMessage(system_prompt)] + [last_message], config)
     
     decision = response.content.strip().lower()
-    print(f"decision: {decision}")
+    logger.debug(f"Routing decision: {decision}")
 
     valid_decisions = {"sql_branch", "pdf_branch", "pdf_sql_branch", "process_return", "analyze_seller_reliability", "general"}
     if decision not in valid_decisions:
@@ -617,7 +621,7 @@ def decide_path(state: AgentState, config: RunnableConfig) -> dict:
 
 def should_continue(state: AgentState) -> Literal[END, "run_query", "answer"]:
     """Decide whether to run query or go to answer."""
-    print("should_continue")
+    logger.debug("Checking if query execution needed")
     messages = state["messages"]
     last_message = messages[-1]
     # If the last model output is a plain answer (no tool calls), go to final answer node

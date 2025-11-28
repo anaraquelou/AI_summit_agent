@@ -5,14 +5,18 @@ from typing import List, Optional, Dict, Any
 import os
 import sys
 from dotenv import load_dotenv
+from logger import setup_logger
+
+# Configure logging using logger.py
+logger = setup_logger(__name__)
 
 # Load environment variables
 load_dotenv()
 
 # Check for required environment variables
 if not os.getenv("OPENAI_API_KEY"):
-    print("❌ Error: OPENAI_API_KEY environment variable is required")
-    print("Please set it in your .env file or environment")
+    logger.error("OPENAI_API_KEY environment variable is required")
+    logger.error("Please set it in your .env file or environment")
     sys.exit(1)
 
 app = FastAPI(title="Data Analyst Chat Agent", version="2.0.0")
@@ -58,6 +62,7 @@ async def root():
 @app.post("/chat", response_model=ChatResponse)
 async def chat(request: ChatRequest):
     try:
+        logger.info(f"Chat request received (thread_id: {request.thread_id})")
         
         # Add the new user message
         langchain_messages = [HumanMessage(content=request.message)]
@@ -78,17 +83,20 @@ async def chat(request: ChatRequest):
         
         # Invoke the agent
         # Using stream to get the final state with all messages
+        logger.debug("Invoking agent")
         final_state = None
         for state in agent.stream(input_state, stream_mode="values", config=config):
             final_state = state
         
         if not final_state:
+            logger.error("Agent returned no state")
             raise HTTPException(status_code=500, detail="Agent returned no state")
         
         # Extract the final response
         # Get the last message from the agent (should be an AIMessage)
         response_messages = final_state.get("messages", [])
         if not response_messages:
+            logger.error("Agent returned no messages")
             raise HTTPException(status_code=500, detail="Agent returned no messages")
         
         # Find the last assistant message
@@ -110,7 +118,7 @@ async def chat(request: ChatRequest):
         if not isinstance(assistant_content, str):
             assistant_content = str(assistant_content)
         
-        
+        logger.debug("Chat response generated successfully")
         return ChatResponse(
             message=assistant_content,
             status="success"
@@ -118,8 +126,8 @@ async def chat(request: ChatRequest):
     except Exception as e:
         import traceback
         error_detail = str(e)
-        print(f"Error in chat endpoint: {error_detail}")
-        print(traceback.format_exc())
+        logger.error(f"Chat endpoint error: {error_detail}")
+        logger.debug(traceback.format_exc())
         raise HTTPException(status_code=500, detail=error_detail)
 
 
