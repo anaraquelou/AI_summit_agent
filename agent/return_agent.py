@@ -21,7 +21,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode
-from langchain_core.messages.utils import trim_messages, count_tokens_approximately
+from agent.agent_utils import trim_history, reduce_messages
 
 
 # Get project root directory (parent of agent/)
@@ -49,21 +49,6 @@ sql_tools = sql_toolkit.get_tools()
 # Extract SQL tools
 run_query_tool = next(tool for tool in sql_tools if tool.name == "sql_db_query")
 run_query_node = ToolNode([run_query_tool], name="run_query")
-
-
-def trim_history(messages, max_tokens: int = 5000):
-    """
-    Trim a list of chat messages to keep only the last messages up to ~max_tokens tokens.
-    Uses `trim_messages` utility from LangChain.
-    """
-    return trim_messages(
-        messages,
-        strategy="last",
-        token_counter=count_tokens_approximately,
-        max_tokens=max_tokens,
-        start_on="human",
-        end_on=("human", "tool"),
-    )
 
 
 def process_order_return(order_id: str) -> str:
@@ -524,63 +509,6 @@ def generate_query(state: AgentState):
     response = llm_with_tools.invoke([system_message] + state["messages"])
 
     return {"messages": [response]}
-
-
-def reduce_messages(messages, keep_last_user=1, keep_last_ai=1):
-    """
-    Safe reducer that keeps the last user + AI messages
-    AND preserves valid tool_call → tool_response ordering.
-    """
-
-    # Reverse iterate
-    reversed_msgs = list(reversed(messages))
-
-    kept = []
-    user_count = 0
-    ai_count = 0
-
-    # Collect minimal relevant messages
-    for msg in reversed_msgs:
-        if isinstance(msg, HumanMessage) and user_count < keep_last_user:
-            kept.append(msg)
-            user_count += 1
-        elif isinstance(msg, AIMessage) and ai_count < keep_last_ai:
-            kept.append(msg)
-            ai_count += 1
-
-    # Determine which tool_call_ids must be preserved
-    required_tool_ids = set()
-    for msg in kept:
-        if isinstance(msg, AIMessage) and msg.tool_calls:
-            for tc in msg.tool_calls:
-                required_tool_ids.add(tc["id"])
-
-    # Collect matching ToolMessages
-    tool_msgs = [
-        msg for msg in messages
-        if isinstance(msg, ToolMessage) and msg.tool_call_id in required_tool_ids
-    ]
-
-    # Build new message list in chronological order
-    new_messages = []
-
-    for msg in messages:
-        # Add AI
-        if msg in kept:
-            new_messages.append(msg)
-
-            # Immediately attach its tool responses
-            if isinstance(msg, AIMessage) and msg.tool_calls:
-                for tc in msg.tool_calls:
-                    for tm in tool_msgs:
-                        if tm.tool_call_id == tc["id"]:
-                            new_messages.append(tm)
-
-        # Add User only if in kept
-        elif isinstance(msg, HumanMessage) and msg in kept:
-            new_messages.append(msg)
-
-    return new_messages
 
 
 def answer_node(state: AgentState) -> AgentState:
