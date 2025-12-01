@@ -12,3 +12,5 @@ pydantic==2.12.3
 python-dotenv==1.0.0
 sqlalchemy==2.0.44
 langsmith==0.4.38
+pytest==8.0.0
+rich==13.7.0
