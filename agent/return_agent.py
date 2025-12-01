@@ -21,7 +21,7 @@ from langgraph.graph import END, START, StateGraph
 from langgraph.graph.message import add_messages
 from langgraph.checkpoint.memory import InMemorySaver
 from langgraph.prebuilt import ToolNode
-from agent.agent_utils import trim_history, reduce_messages
+from agent.agent_utils import trim_history
 from logger import setup_logger
 
 

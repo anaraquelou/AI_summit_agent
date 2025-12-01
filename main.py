@@ -1,7 +1,7 @@
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from typing import Optional, Dict, Any
 import os
 import sys
 from dotenv import load_dotenv
@@ -36,11 +36,6 @@ from langchain_core.messages import HumanMessage, AIMessage, BaseMessage
 from langchain_core.runnables import RunnableConfig
 
 # Pydantic models for API
-class ChatMessage(BaseModel):
-    role: str  # "user" or "assistant"
-    content: str
-    timestamp: Optional[str] = None
-
 class ChatRequest(BaseModel):
     message: str
     thread_id: Optional[str] = "default"  # Thread ID for conversation memory
