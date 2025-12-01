@@ -4,7 +4,11 @@ A LangGraph-based chat agent that intelligently routes queries to retrieve infor
 
 ## Features
 
-- **Intelligent Routing**: Automatically routes queries to PDF, SQL, both, seller analysis, return processing, or general conversation
+- **Intelligent Data Source Selection**: The agent automatically determines which data sources are needed for each query:
+  - **PDF only**: For policy questions that don't require database lookup
+  - **Database only**: For data queries that don't need policy context
+  - **Both PDF + Database**: For complex queries requiring policy rules and order data (e.g., eligibility checks)
+- **Smart Routing**: Routes queries to the appropriate tools (PDF, SQL, both, seller analysis, return processing, or general conversation)
 - **PDF Retrieval**: Extracts return policy information from PDF documents
 - **Database Integration**: Queries customer orders, payment information, and seller metrics
 - **Return Processing**: Updates order status to 'return_processed' in the database
@@ -21,7 +25,7 @@ A LangGraph-based chat agent that intelligently routes queries to retrieve infor
 
 ## Agent Workflow
 
-The agent uses intelligent routing to determine the best path for each query:
+The agent intelligently selects which data sources are needed for each query:
 
 ![Agent Workflow](img/return_agent_workflow.png)
 
@@ -31,11 +35,11 @@ The agent uses intelligent routing to determine the best path for each query:
    - `pdf_sql_branch`: Both PDF and database needed
    - `process_return`: Direct return processing
    - `analyze_seller_reliability`: Seller reliability analysis
-   - `general`: General conversation
+   - `general`: General conversation (no data sources needed)
 
-2. **Execution**: Agent follows the selected path, gathering necessary information from PDF, database, or both
+2. **Execution**: Agent follows the selected path, gathering necessary information from the chosen data source(s)
 
-3. **Answer Generation**: Combines all context to generate a comprehensive response
+3. **Answer Generation**: Combines all gathered context to generate a comprehensive response
 
 ## Setup
 
