@@ -84,8 +84,6 @@ python create_database.py
 
 This will create `olist_ecommerce.db` from the CSV files in the directory.
 
-**Note**: The script requires `pandas`, which is included in `requirements.txt`.
-
 ### Accessing the Database with DBeaver Community
 
 1. **Install DBeaver Community**: Download from [dbeaver.io](https://dbeaver.io/download/)
@@ -106,25 +104,6 @@ This will create `olist_ecommerce.db` from the CSV files in the directory.
    - Expand the connection to see all tables
    - Right-click any table → "View Data" to browse records
    - Use the SQL Editor to run custom queries
-
-**Example queries in DBeaver**:
-```sql
--- View all orders
-SELECT * FROM orders LIMIT 10;
-
--- Check order statuses
-SELECT order_status, COUNT(*) as count 
-FROM orders 
-GROUP BY order_status;
-
--- Find orders eligible for return (delivered within 30 days)
-SELECT order_id, order_status, 
-       date(order_delivered_customer_date) as delivered_date,
-       date('now') - date(order_delivered_customer_date) as days_since_delivery
-FROM orders 
-WHERE order_status = 'delivered' 
-  AND date('now') - date(order_delivered_customer_date) <= 30;
-```
 
 ### Backend
 
@@ -157,25 +136,23 @@ The agent routes queries based on intent:
 
 ### Example Queries
 
-**Policy Questions:**
-- "Qual é o prazo máximo para devolução?"
-- "Como funciona a política de devolução?"
+**Requires database only:**
+- "Há quantos pedidos com status cancelado?"
+- "Quais 3 vendedores tiveram o maior número de entregas atrasadas em 2024?"
 
-**Order Information:**
-- "Qual é o status do pedido 6514b8ad8028c9f2cc2374ded245783f?"
-- "Qual o id do cliente para o pedido X?"
+**Required PDF only:**
+- "No caso de devolução quem arca com custo do envio?"
+- "Qual o prazo de devolução por defeito da BIX?"
 
-**Eligibility Checks:**
-- "O pedido e481f51cbdc54678b7cc49136f2d6af7 é elegível para devolução?"
-- "O pedido X pode ser devolvido?"
+**Requires database + PDF:**
+- "O pedido dd787ad9c97e5504d6ea0bd294906902 está dentro do prazo de devolução por arrependimento?"
+- "Quantos pedidos entregues da base de dados estão dentro do prazo de devolução por defeito? Considere que são todos itens não duráveis"
 
-**Return Processing:**
-- "Devolver o pedido e481f51cbdc54678b7cc49136f2d6af7"
-- "Processar devolução do pedido 12345"
-
-**Seller Reliability:**
+**Call seller reliability tool:**
 - "O seller 3442f8959a84dea7ee197c632cb2df15 é confiável?"
-- "Quais os top 3 vendedores menos confiáveis?"
+
+**Call return order process tool:**
+- "Processe devolução do pedido 2591f6277be80b0c25627c745ec900c4"
 
 ## API Endpoints
 
